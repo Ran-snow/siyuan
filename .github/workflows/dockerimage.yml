@@ -37,6 +37,5 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and Push latest to Images Hub
-        uses: docker/build-push-action@v4
         run: |
           docker buildx build --push --platform linux/amd64 -t ghcr.io/${{ env.REPO }}/siyuan:latest
