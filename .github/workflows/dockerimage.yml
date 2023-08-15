@@ -35,12 +35,12 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: app/pnpm-lock.yaml
 
-      - name: Get downcase repo
+      - name: Get downcase repo name
         run: |
           echo "REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
           echo ${{ env.REPO }}
           echo 123
-          echo $env.REPO
+          echo $REPO
           echo 456
 
       # - name: Set up QEMU
