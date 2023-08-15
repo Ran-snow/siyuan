@@ -19,6 +19,17 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
 
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.21.0'
+          check-latest: true
+          cache-dependency-path: kernel/go.sum
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: 'pnpm'
+
       - name: Get downcase repo
         run: |
           echo "REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
