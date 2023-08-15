@@ -38,8 +38,5 @@ jobs:
 
       - name: Build and Push latest to Images Hub
         uses: docker/build-push-action@v4
-        with:
-          push: true
-          platforms: linux/amd64
-          tags: |
-            ghcr.io/${{ env.REPO }}/siyuan:latest
+        run: |
+          docker buildx build --push --platform linux/amd64 -t ghcr.io/${{ env.REPO }}/siyuan:latest
