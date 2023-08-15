@@ -33,7 +33,7 @@ jobs:
         with:
           node-version: 18
           cache: 'pnpm'
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: app/pnpm-lock.yaml
 
       - name: Get downcase repo
         run: |
