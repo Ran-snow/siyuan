@@ -39,6 +39,9 @@ jobs:
         run: |
           echo "REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
           echo ${{ env.REPO }}
+          echo 123
+          echo ${env.REPO}
+          echo 456
 
       # - name: Set up QEMU
       #   uses: docker/setup-qemu-action@v2
