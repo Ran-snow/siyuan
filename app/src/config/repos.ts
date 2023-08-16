@@ -45,7 +45,7 @@ const renderProvider = (provider: number) => {
         return `<div class="b3-label b3-label--inner">
     ${window.siyuan.languages.syncThirdPartyProviderS3Intro}
     <div class="fn__hr"></div>
-    <em>${window.siyuan.languages.featureBetaStage}</em>
+   <!-- <em>${window.siyuan.languages.featureBetaStage}</em> -->
     <div class="fn__hr"></div>
     ${window.siyuan.languages.syncThirdPartyProviderTip}
 </div>
@@ -102,7 +102,7 @@ const renderProvider = (provider: number) => {
         return `<div class="b3-label b3-label--inner">
     ${window.siyuan.languages.syncThirdPartyProviderWebDAVIntro}
     <div class="fn__hr"></div>
-    <em>${window.siyuan.languages.featureBetaStage}</em>
+   <!-- <em>${window.siyuan.languages.featureBetaStage}</em> -->
     <div class="fn__hr"></div>    
     ${window.siyuan.languages.syncThirdPartyProviderTip}
 </div>
@@ -268,7 +268,7 @@ export const repos = {
     </div>
     <span class="fn__space"></span>
     <select id="syncProvider" class="b3-select fn__flex-center fn__size200">
-        <option value="0" ${window.siyuan.config.sync.provider === 0 ? "selected" : ""}>SiYuan</option>
+        <!-- <option value="0" ${window.siyuan.config.sync.provider === 0 ? "selected" : ""}>SiYuan</option> -->
         <option value="2" ${window.siyuan.config.sync.provider === 2 ? "selected" : ""}>S3</option>
         <option value="3" ${window.siyuan.config.sync.provider === 3 ? "selected" : ""}>WebDAV</option>
     </select>

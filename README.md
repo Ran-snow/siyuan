@@ -33,6 +33,9 @@
 - 2023-08-13 去重用户相关内容，可以云端同步。去重更新提示
     - 下载地址(百度网盘)：链接: https://pan.baidu.com/s/1qWsq2Jt_WOa_cbFvRshBdw?pwd=p9qc 提取码: p9qc
 
+- 2023-08-16 去除云端存储服务提供商siyuan，删除“该特性支持即将收费（订阅会员不用再单独付费），一次性付费后终身可用"字样
+    - docker：[https://github.com/Ran-snow/siyuan/pkgs/container/siyuan](https://github.com/Ran-snow/siyuan/pkgs/container/siyuan)
+
 ## 💡 简介
 
 思源笔记是一款隐私优先的个人知识管理系统，支持细粒度块级引用和 Markdown 所见即所得。
