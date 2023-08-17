@@ -19,11 +19,17 @@ RUN apk add --no-cache gcc musl-dev git && \
     find /opt/siyuan/ -name .git | xargs rm -rf
 
 FROM alpine:latest
-LABEL maintainer="Liang Ding<845765@qq.com>"
+LABEL org.opencontainers.image.source="https://github.com/Ran-snow/siyuan"
+LABEL org.opencontainers.image.description="Some free change base on siyuan-note/siyuan"
+LABEL org.opencontainers.image.licenses="AGPL-3.0"
 
 WORKDIR /opt/siyuan/
 COPY --from=GO_BUILD /opt/siyuan/ /opt/siyuan/
-RUN addgroup --gid 1000 siyuan && adduser --uid 1000 --ingroup siyuan --disabled-password siyuan && apk add --no-cache ca-certificates tzdata && chown -R siyuan:siyuan /opt/siyuan/
+RUN addgroup --gid 1000 siyuan && \
+    adduser --uid 1000 --ingroup siyuan --disabled-password siyuan && \
+    apk add --no-cache ca-certificates tzdata && \
+    cp -rf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    chown -R siyuan:siyuan /opt/siyuan/
 
 ENV TZ=Asia/Shanghai
 ENV RUN_IN_CONTAINER=true
