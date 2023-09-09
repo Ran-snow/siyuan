@@ -21,9 +21,7 @@ import {
     assetMethodMenu, assetMoreMenu,
     renderNextAssetMark,
     renderPreview,
-    toggleAssetHistory
 } from "../../search/assets";
-import {getQueryTip} from "../../search/util";
 
 const replace = (element: Element, config: ISearchOption, isAll: boolean) => {
     if (config.method === 1 || config.method === 2) {
@@ -282,13 +280,13 @@ const initSearchEvent = (app: App, element: Element, config: ISearchOption) => {
             setStorageVal(Constants.LOCAL_SEARCHDATA, window.siyuan.storage[Constants.LOCAL_SEARCHDATA]);
         }
     });
-    const replaceInputElement = element.querySelector(".toolbar .b3-text-field") as HTMLInputElement;
+    const replaceInputElement = element.querySelector(".toolbar .toolbar__title") as HTMLInputElement;
     replaceInputElement.value = config.r || "";
 
     const criteriaData: ISearchOption[] = [];
     initCriteriaMenu(element.querySelector("#criteria"), criteriaData, config);
 
-    const assetsElement = document.querySelector("#searchAssetsPanel")
+    const assetsElement = document.querySelector("#searchAssetsPanel");
     const searchListElement = element.querySelector("#searchList") as HTMLElement;
     const localSearch = window.siyuan.storage[Constants.LOCAL_SEARCHASSET] as ISearchAssetOption;
     element.addEventListener("click", (event: MouseEvent) => {
@@ -469,7 +467,6 @@ const initSearchEvent = (app: App, element: Element, config: ISearchOption) => {
                         }
                     }, config);
                 });
-                window.siyuan.menus.menu.element.style.zIndex = "220";
                 window.siyuan.menus.menu.fullscreen();
                 event.stopPropagation();
                 event.preventDefault();
@@ -486,7 +483,6 @@ const initSearchEvent = (app: App, element: Element, config: ISearchOption) => {
                     config.page = 1;
                     updateSearchResult(config, element, true);
                 });
-                window.siyuan.menus.menu.element.style.zIndex = "220";
                 window.siyuan.menus.menu.fullscreen();
                 event.stopPropagation();
                 event.preventDefault();
@@ -607,7 +603,7 @@ export const popSearch = (app: App, config = window.siyuan.storage[Constants.LOC
         html: `<div class="fn__flex-column" style="height: 100%">
     <div class="toolbar toolbar--border${config.hasReplace ? "" : " fn__none"}">
         <svg class="toolbar__icon"><use xlink:href="#iconReplace"></use></svg>
-        <input id="toolbarReplace" style="font-size: 17px" class="b3-text-field fn__flex-1">
+        <input id="toolbarReplace" class="toolbar__title">
         <svg class="fn__rotate fn__none toolbar__icon"><use xlink:href="#iconRefresh"></use></svg>
         <div class="fn__space"></div>
         <button data-type="replace-all" class="b3-button b3-button--outline fn__flex-center">${window.siyuan.languages.replaceAll}</button>
@@ -679,14 +675,14 @@ export const popSearch = (app: App, config = window.siyuan.storage[Constants.LOC
 };
 
 const goAsset = () => {
-    const assetsElement = document.querySelector("#searchAssetsPanel")
-    assetsElement.classList.remove("fn__none")
-    const listElement = assetsElement.querySelector("#searchAssetList")
+    const assetsElement = document.querySelector("#searchAssetsPanel");
+    assetsElement.classList.remove("fn__none");
+    const listElement = assetsElement.querySelector("#searchAssetList");
     if (listElement.innerHTML) {
-        return
+        return;
     }
     const localSearch = window.siyuan.storage[Constants.LOCAL_SEARCHASSET] as ISearchAssetOption;
-    const inputElement = assetsElement.querySelector("input")
+    const inputElement = assetsElement.querySelector("input");
     inputElement.value = localSearch.k;
     inputElement.addEventListener("compositionend", (event: InputEvent) => {
         if (event.isComposing) {
@@ -701,4 +697,4 @@ const goAsset = () => {
         assetInputEvent(assetsElement, localSearch);
     });
     assetInputEvent(assetsElement, localSearch);
-}
+};

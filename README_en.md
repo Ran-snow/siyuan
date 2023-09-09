@@ -19,7 +19,6 @@
 <a title="Last Commit" target="_blank" href="https://github.com/siyuan-note/siyuan/commits/master"><img src="https://img.shields.io/github/last-commit/siyuan-note/siyuan.svg?style=flat-square&color=FF9900"></a>
 <br><br>
 <a title="Twitter" target="_blank" href="https://twitter.com/b3logos"><img alt="Twitter Follow" src="https://img.shields.io/twitter/follow/b3logos?label=Follow&style=social"></a>
-<a title="Discord" target="_blank" href="https://discord.com/channels/808152298789666826"><img alt="Discord" src="https://img.shields.io/discord/808152298789666826?logo=discord&label=Chat&style=social"></a>
 <br><br>
 <a href="https://www.producthunt.com/posts/siyuan?utm_source=badge-featured&utm_medium=badge&utm_souce=badge-siyuan" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=394475&theme=light" alt="SiYuan - WYSIWYG&#0032;Block&#0032;Ref&#0032;E2EE&#0032;Sync&#0032;Local&#0045;first | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
 </p>
@@ -272,7 +271,7 @@
 
 ## 🙏 鸣谢
 
-思源的诞生离不开众多的开源项目和贡献者，请参考项目源代码/kernel/go.mod、package.json 和项目首页。
+思源的诞生离不开众多的开源项目和贡献者，请参考项目源代码 kernel/go.mod、app/package.json 和项目首页。
 
 思源的成长离不开用户的反馈和宣传推广，感谢所有人对思源的帮助 ❤️
 
