@@ -19,7 +19,7 @@ import * as dayjs from "dayjs";
 import {Constants} from "../constants";
 import {exportImage} from "../protyle/export/util";
 import {App} from "../index";
-import {renderAVAttribute} from "../protyle/render/av/render";
+import {renderAVAttribute} from "../protyle/render/av/blockAttr";
 
 const bindAttrInput = (inputElement: HTMLInputElement, id: string) => {
     inputElement.addEventListener("change", () => {
@@ -33,7 +33,7 @@ const bindAttrInput = (inputElement: HTMLInputElement, id: string) => {
 export const openWechatNotify = (nodeElement: Element) => {
     const id = nodeElement.getAttribute("data-node-id");
     const range = getEditorRange(nodeElement);
-    const reminder = nodeElement.getAttribute("custom-reminder-wechat");
+    const reminder = nodeElement.getAttribute(Constants.CUSTOM_REMINDER_WECHAT);
     let reminderFormat = "";
     if (reminder) {
         reminderFormat = dayjs(reminder).format("YYYY-MM-DDTHH:mm");
@@ -68,7 +68,7 @@ export const openWechatNotify = (nodeElement: Element) => {
         }
         btnsElement[1].setAttribute("disabled", "disabled");
         fetchPost("/api/block/setBlockReminder", {id, timed: "0"}, () => {
-            nodeElement.removeAttribute("custom-reminder-wechat");
+            nodeElement.removeAttribute(Constants.CUSTOM_REMINDER_WECHAT);
             dialog.destroy();
         });
     });
@@ -85,7 +85,7 @@ export const openWechatNotify = (nodeElement: Element) => {
             btnsElement[2].setAttribute("disabled", "disabled");
             const timed = dayjs(date).format("YYYYMMDDHHmmss");
             fetchPost("/api/block/setBlockReminder", {id, timed}, () => {
-                nodeElement.setAttribute("custom-reminder-wechat", timed);
+                nodeElement.setAttribute(Constants.CUSTOM_REMINDER_WECHAT, timed);
                 dialog.destroy();
             });
         } else {
@@ -98,7 +98,7 @@ export const openFileWechatNotify = (protyle: IProtyle) => {
     fetchPost("/api/block/getDocInfo", {
         id: protyle.block.rootID
     }, (response) => {
-        const reminder = response.data.ial["custom-reminder-wechat"];
+        const reminder = response.data.ial[Constants.CUSTOM_REMINDER_WECHAT];
         let reminderFormat = "";
         if (reminder) {
             reminderFormat = dayjs(reminder).format("YYYY-MM-DDTHH:mm");
@@ -149,16 +149,16 @@ export const openFileWechatNotify = (protyle: IProtyle) => {
     });
 };
 
-export const openFileAttr = (attrs: IObject, focusName = "bookmark") => {
+export const openFileAttr = (attrs: IObject, focusName = "bookmark", protyle?: IProtyle) => {
     let customHTML = "";
     let notifyHTML = "";
     let hasAV = false;
     const range = getSelection().rangeCount > 0 ? getSelection().getRangeAt(0) : null;
     Object.keys(attrs).forEach(item => {
-        if ("custom-riff-decks" === item) {
+        if (Constants.CUSTOM_RIFF_DECKS === item || item.startsWith("custom-sy-")) {
             return;
         }
-        if (item === "custom-reminder-wechat") {
+        if (item === Constants.CUSTOM_REMINDER_WECHAT) {
             notifyHTML = `<label class="b3-label b3-label--noborder">
     ${window.siyuan.languages.wechatReminder}
     <div class="fn__hr"></div>
@@ -187,7 +187,7 @@ export const openFileAttr = (attrs: IObject, focusName = "bookmark") => {
             <span class="item__text">${window.siyuan.languages.builtIn}</span>
             <span class="fn__flex-1"></span>
         </div>
-        <div class="item item--full${hasAV ? "" : " fn__none"}" data-type="av">
+        <div class="item item--full${hasAV ? "" : " fn__none"}" data-type="NodeAttributeView">
             <span class="fn__flex-1"></span>
             <span class="item__text">${window.siyuan.languages.database}</span>
             <span class="fn__flex-1"></span>
@@ -225,7 +225,7 @@ export const openFileAttr = (attrs: IObject, focusName = "bookmark") => {
             </label>
             ${notifyHTML}
         </div>
-        <div data-type="av" class="fn__none custom-attr"></div>
+        <div data-type="NodeAttributeView" class="fn__none custom-attr" data-av-id="${attrs["custom-avs"]}" data-node-id="${attrs.id}"></div>
         <div data-type="custom" class="fn__none custom-attr">
            ${customHTML}
            <div class="b3-label">
@@ -252,8 +252,8 @@ export const openFileAttr = (attrs: IObject, focusName = "bookmark") => {
                 target.classList.add("item--focus");
                 dialog.element.querySelectorAll(".custom-attr").forEach((item: HTMLElement) => {
                     if (item.dataset.type === target.dataset.type) {
-                        if (item.dataset.type === "av" && item.innerHTML === "") {
-                            renderAVAttribute(item, attrs.id);
+                        if (item.dataset.type === "NodeAttributeView" && item.innerHTML === "") {
+                            renderAVAttribute(item, attrs.id, protyle);
                         }
                         item.classList.remove("fn__none");
                     } else {
@@ -349,13 +349,13 @@ export const openFileAttr = (attrs: IObject, focusName = "bookmark") => {
     });
 };
 
-export const openAttr = (nodeElement: Element, focusName = "bookmark") => {
+export const openAttr = (nodeElement: Element, focusName = "bookmark", protyle?: IProtyle) => {
     if (nodeElement.getAttribute("data-type") === "NodeThematicBreak") {
         return;
     }
     const id = nodeElement.getAttribute("data-node-id");
     fetchPost("/api/attr/getBlockAttrs", {id}, (response) => {
-        openFileAttr(response.data, focusName);
+        openFileAttr(response.data, focusName, protyle);
     });
 };
 
@@ -473,7 +473,7 @@ export const exportMd = (id: string) => {
 
                     fetchPost("/api/template/docSaveAsTemplate", {
                         id,
-                        name,
+                        name: inputElement.value,
                         overwrite: false
                     }, response => {
                         if (response.code === 1) {
@@ -481,7 +481,7 @@ export const exportMd = (id: string) => {
                             confirmDialog(window.siyuan.languages.export, window.siyuan.languages.exportTplTip, () => {
                                 fetchPost("/api/template/docSaveAsTemplate", {
                                     id,
-                                    name,
+                                    name: inputElement.value,
                                     overwrite: true
                                 }, resp => {
                                     if (resp.code === 0) {
@@ -493,7 +493,6 @@ export const exportMd = (id: string) => {
                         }
                         showMessage(window.siyuan.languages.exportTplSucc);
                     });
-
                     dialog.destroy();
                 });
             }

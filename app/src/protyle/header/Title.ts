@@ -41,8 +41,8 @@ export class Title {
             this.element.classList.add("protyle-wysiwyg--attr");
         }
         // 标题内需要一个空格，避免首次加载出现`请输入文档名`干扰
-        this.element.innerHTML = `<span aria-label="${window.siyuan.languages.gutterTip2}" class="protyle-title__icon" data-type="a" data-position="right"><svg><use xlink:href="#iconFile"></use></svg></span>
-<div contenteditable="true" data-position="center" spellcheck="${window.siyuan.config.editor.spellcheck}" class="protyle-title__input" data-tip="${window.siyuan.languages._kernel[16]}"> </div><div class="protyle-attr"></div>`;
+        this.element.innerHTML = `<span aria-label="${window.siyuan.languages.gutterTip2}" data-position="right" class="protyle-title__icon ariaLabel"><svg><use xlink:href="#iconFile"></use></svg></span>
+<div contenteditable="true" spellcheck="${window.siyuan.config.editor.spellcheck}" class="protyle-title__input" data-tip="${window.siyuan.languages._kernel[16]}"> </div><div class="protyle-attr"></div>`;
         this.editElement = this.element.querySelector(".protyle-title__input");
         this.editElement.addEventListener("paste", (event: ClipboardEvent) => {
             event.stopPropagation();
@@ -140,7 +140,7 @@ export class Title {
                 fetchPost("/api/block/getDocInfo", {
                     id: protyle.block.rootID
                 }, (response) => {
-                    openFileAttr(response.data.ial);
+                    openFileAttr(response.data.ial, "bookmark", protyle);
                 });
                 event.preventDefault();
                 event.stopPropagation();
@@ -179,7 +179,7 @@ export class Title {
                 fetchPost("/api/block/getDocInfo", {
                     id: protyle.block.rootID
                 }, (response) => {
-                    openFileAttr(response.data.ial);
+                    openFileAttr(response.data.ial, "bookmark", protyle);
                 });
             } else {
                 const iconRect = iconElement.getBoundingClientRect();
@@ -287,7 +287,6 @@ export class Title {
         }, Constants.TIMEOUT_INPUT);
     }
 
-
     public setTitle(title: string) {
         if (code160to32(title) !== code160to32(this.editElement.textContent)) {
             this.editElement.textContent = title === "Untitled" ? "" : title;
@@ -299,8 +298,8 @@ export class Title {
             return false;
         }
         this.element.setAttribute("data-node-id", protyle.block.rootID);
-        if (response.data.ial["custom-riff-decks"]) {
-            this.element.setAttribute("custom-riff-decks", response.data.ial["custom-riff-decks"]);
+        if (response.data.ial[Constants.CUSTOM_RIFF_DECKS]) {
+            this.element.setAttribute(Constants.CUSTOM_RIFF_DECKS, response.data.ial[Constants.CUSTOM_RIFF_DECKS]);
         }
         protyle.background?.render(response.data.ial, protyle.block.rootID);
         protyle.wysiwyg.renderCustom(response.data.ial);

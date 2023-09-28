@@ -435,7 +435,7 @@ export const JSONToLayout = (app: App, isStart: boolean) => {
         openFileById({
             app,
             id: idZoomIn.id,
-            action: idZoomIn.isZoomIn ? [Constants.CB_GET_ALL, Constants.CB_GET_FOCUS] : [Constants.CB_GET_FOCUS, Constants.CB_GET_CONTEXT],
+            action: idZoomIn.isZoomIn ? [Constants.CB_GET_ALL, Constants.CB_GET_FOCUS] : [Constants.CB_GET_FOCUS, Constants.CB_GET_CONTEXT, Constants.CB_GET_ROOTSCROLL],
             zoomIn: idZoomIn.isZoomIn
         });
     } else {
@@ -533,7 +533,9 @@ export const layoutToJSON = (layout: Layout | Wnd | Tab | Model, json: any, drop
     } else if (layout instanceof Custom) {
         json.instance = "Custom";
         json.customModelType = layout.type;
-        json.customModelData = layout.data;
+        json.customModelData = Object.assign({}, layout.data);
+        // https://github.com/siyuan-note/siyuan/issues/9250
+        delete json.customModelData.editor;
     }
 
     if (layout instanceof Layout || layout instanceof Wnd) {
@@ -662,7 +664,11 @@ export const resizeTabs = () => {
             }
             item.editors.forEach(editorItem => {
                 hideElements(["gutter"], editorItem.protyle);
+                editorItem.resize();
             });
+        });
+        models.search.forEach(item => {
+            item.edit.resize();
         });
         models.custom.forEach(item => {
             if (item.resize) {

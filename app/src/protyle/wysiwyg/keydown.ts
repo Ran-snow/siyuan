@@ -96,6 +96,15 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
         if (!nodeElement) {
             return;
         }
+
+        // https://ld246.com/article/1694506408293
+        const endElement = hasClosestBlock(range.endContainer);
+        if (!matchHotKey("⌘C", event) && endElement && !nodeElement.isSameNode(endElement)) {
+            event.stopPropagation();
+            event.preventDefault();
+            return;
+        }
+
         if (nodeElement.classList.contains("av")) {
             if (matchHotKey("⌘B", event) || matchHotKey("⌘I", event) || matchHotKey("⌘U", event)) {
                 event.preventDefault();
@@ -1047,7 +1056,7 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                 } else {
                     actionElement = topElement;
                 }
-                openAttr(actionElement);
+                openAttr(actionElement, "bookmark", protyle);
             } else {
                 const oldHTML = topElement.outerHTML;
                 const name = Lute.EscapeHTMLStr(selectText);
@@ -1064,7 +1073,7 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
             event.stopPropagation();
             return true;
         }
-        if (matchHotKey(window.siyuan.config.keymap.editor.general.rename.custom, event)) {
+        if (matchHotKey(window.siyuan.config.keymap.editor.general.rename.custom, event) && !protyle.disabled) {
             if (selectText === "") {
                 fetchPost("/api/block/getDocInfo", {
                     id: protyle.block.rootID
@@ -1454,7 +1463,7 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
             return;
         }
 
-        if (isNotEditBlock(nodeElement) && matchHotKey("⌘C", event)) {
+        if (matchHotKey("⌘C", event)) {
             let html = "";
             protyle.wysiwyg.element.querySelectorAll(".protyle-wysiwyg--select").forEach(item => {
                 html += removeEmbed(item);
@@ -1466,7 +1475,7 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
             }
         }
 
-        if (isNotEditBlock(nodeElement) && matchHotKey("⌘X", event)) {
+        if (matchHotKey("⌘X", event)) {
             let html = "";
             nodeElement.classList.add("protyle-wysiwyg--select");
             const selectElements = protyle.wysiwyg.element.querySelectorAll(".protyle-wysiwyg--select");
@@ -1632,7 +1641,7 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                     openFileById({
                         app: protyle.app,
                         id,
-                        action: foldResponse.data ? [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL] : [Constants.CB_GET_FOCUS, Constants.CB_GET_CONTEXT],
+                        action: foldResponse.data ? [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL] : [Constants.CB_GET_FOCUS, Constants.CB_GET_CONTEXT, Constants.CB_GET_ROOTSCROLL],
                         zoomIn: foldResponse.data
                     });
                 });
@@ -1645,7 +1654,7 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                     openFileById({
                         app: protyle.app,
                         id,
-                        action: foldResponse.data ? [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL] : [Constants.CB_GET_HL, Constants.CB_GET_CONTEXT],
+                        action: foldResponse.data ? [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL] : [Constants.CB_GET_HL, Constants.CB_GET_CONTEXT, Constants.CB_GET_ROOTSCROLL],
                         keepCursor: true,
                         zoomIn: foldResponse.data
                     });
@@ -1659,7 +1668,7 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                         app: protyle.app,
                         id,
                         position: "right",
-                        action: foldResponse.data ? [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL] : [Constants.CB_GET_FOCUS, Constants.CB_GET_CONTEXT],
+                        action: foldResponse.data ? [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL] : [Constants.CB_GET_FOCUS, Constants.CB_GET_CONTEXT, Constants.CB_GET_ROOTSCROLL],
                         zoomIn: foldResponse.data
                     });
                 });
@@ -1672,7 +1681,7 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                         app: protyle.app,
                         id,
                         position: "bottom",
-                        action: foldResponse.data ? [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL] : [Constants.CB_GET_FOCUS, Constants.CB_GET_CONTEXT],
+                        action: foldResponse.data ? [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL] : [Constants.CB_GET_FOCUS, Constants.CB_GET_CONTEXT, Constants.CB_GET_ROOTSCROLL],
                         zoomIn: foldResponse.data
                     });
                 });

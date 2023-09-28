@@ -519,11 +519,11 @@ func Close(force bool, execInstallPkg int) (exitCode int) {
 		// 这里多等待一段时间，等待安装程序启动
 		time.Sleep(4 * time.Second)
 	}
-	logging.LogInfof("exited kernel")
 	closeSyncWebSocket()
-	util.WebSocketServer.Close()
 	go func() {
 		time.Sleep(500 * time.Millisecond)
+		logging.LogInfof("exited kernel")
+		util.WebSocketServer.Close()
 		os.Exit(logging.ExitCodeOk)
 	}()
 	return
@@ -714,12 +714,11 @@ func IsSubscriber() bool {
 	return nil != Conf.User && (-1 == Conf.User.UserSiYuanProExpireTime || 0 < Conf.User.UserSiYuanProExpireTime) && 0 == Conf.User.UserSiYuanSubscriptionStatus
 }
 
-// TODO 判断用户是否订阅
 func IsOneTimePaid() bool {
-	//if IsSubscriber() {
-	//	return true
-	//}
-	//return nil != Conf.User // Sign in to use S3/WebDAV data sync https://github.com/siyuan-note/siyuan/issues/8779
+	// if IsSubscriber() {
+	// 	return true
+	// }
+	// return nil != Conf.User // Sign in to use S3/WebDAV data sync https://github.com/siyuan-note/siyuan/issues/8779
 	// TODO https://github.com/siyuan-note/siyuan/issues/8780
 	// return nil != Conf.User && 1 == Conf.User.UserSiYuanOneTimePayStatus
 	return true

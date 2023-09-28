@@ -91,11 +91,7 @@ export const highlightRender = (element: Element, cdn = Constants.PROTYLE_CDN) =
                 if (!isPreview && (lineNumber === "true" || (lineNumber !== "false" && window.siyuan.config.editor.codeSyntaxHighlightLineNum))) {
                     // 需要先添加 class 以防止抖动 https://ld246.com/article/1648116585443
                     block.classList.add("protyle-linenumber");
-                    setTimeout(() => {
-                        // windows 需等待字体下载完成再计算，否则导致不换行，高度计算错误
-                        // https://github.com/siyuan-note/siyuan/issues/9029
-                        lineNumberRender(block);
-                    }, block.getAttribute("contenteditable") === "true" ? 0 : Constants.TIMEOUT_DBLCLICK);
+                    lineNumberRender(block);
                     if (languageElement) {
                         languageElement.style.marginLeft = "3.6em";
                     }
@@ -136,6 +132,8 @@ export const lineNumberRender = (block: HTMLElement) => {
         return;
     }
     block.classList.add("protyle-linenumber");
+    // clientHeight 总是取的整数
+    block.parentElement.style.lineHeight = `${((parseInt(block.parentElement.style.fontSize) || window.siyuan.config.editor.fontSize) * 1.625 * 0.85).toFixed(0)}px`;
     const lineNumberTemp = document.createElement("div");
     lineNumberTemp.className = "hljs protyle-linenumber";
     lineNumberTemp.setAttribute("style", `padding-top:0 !important;padding-bottom:0 !important;min-height:auto !important;white-space:${block.style.whiteSpace};word-break:${block.style.wordBreak};font-variant-ligatures:${block.style.fontVariantLigatures};`);
@@ -152,8 +150,11 @@ export const lineNumberRender = (block: HTMLElement) => {
         let lineHeight = "";
         if (isWrap) {
             lineNumberTemp.textContent = line || "\n";
-            const height = lineNumberTemp.getBoundingClientRect().height.toFixed(1);
-            lineHeight = ` style="height:${height}px;"`;
+            // 不能使用 lineNumberTemp.getBoundingClientRect().height.toFixed(1) 否则
+            // windows 需等待字体下载完成再计算，否则导致不换行，高度计算错误
+            // https://github.com/siyuan-note/siyuan/issues/9029
+            // https://github.com/siyuan-note/siyuan/issues/9140
+            lineHeight = ` style="height:${lineNumberTemp.clientHeight}px;"`;
         }
         lineNumberHTML += `<span${lineHeight}></span>`;
     });

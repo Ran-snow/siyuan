@@ -211,7 +211,7 @@ export class Gutter {
                 }
                 foldElement.classList.remove("protyle-wysiwyg--hl");
             } else if (window.siyuan.shiftIsPressed && !protyle.disabled) {
-                openAttr(protyle.wysiwyg.element.querySelector(`[data-node-id="${id}"]`));
+                openAttr(protyle.wysiwyg.element.querySelector(`[data-node-id="${id}"]`), "bookmark", protyle);
             } else {
                 this.renderMenu(protyle, buttonElement);
                 // https://ld246.com/article/1648433751993
@@ -378,7 +378,7 @@ export class Gutter {
                 blockRender(options.protyle, options.protyle.wysiwyg.element);
                 processRender(options.protyle.wysiwyg.element);
                 highlightRender(options.protyle.wysiwyg.element);
-                avRender(options.protyle.wysiwyg.element);
+                avRender(options.protyle.wysiwyg.element, options.protyle);
             }
         };
     }
@@ -1475,9 +1475,10 @@ export class Gutter {
             if (!protyle.disabled) {
                 window.siyuan.menus.menu.append(new MenuItem({
                     label: window.siyuan.languages.attr,
+                    icon: "iconAttr",
                     accelerator: window.siyuan.config.keymap.editor.general.attr.custom + "/" + updateHotkeyTip("⇧Click"),
                     click() {
-                        openAttr(nodeElement);
+                        openAttr(nodeElement, "bookmark", protyle);
                     }
                 }).element);
             }

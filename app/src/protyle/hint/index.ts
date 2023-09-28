@@ -33,6 +33,7 @@ import {isMobile} from "../../util/functions";
 import {isCtrl, isIPhone} from "../util/compatibility";
 import {avRender} from "../render/av/render";
 import {genIconHTML} from "../render/util";
+import {insertAttrViewBlockAnimation} from "../render/av/action";
 
 export class Hint {
     public timeId: number;
@@ -65,8 +66,8 @@ export class Hint {
                     setTimeout(() => {
                         this.fill(decodeURIComponent(btnElement.getAttribute("data-value")), protyle);
                     }, 148);
-                    focusByRange(protyle.toolbar.range);
                 }
+                focusByRange(protyle.toolbar.range);
 
                 event.preventDefault();
                 event.stopPropagation(); // https://github.com/siyuan-note/siyuan/issues/3710
@@ -159,10 +160,8 @@ ${unicode2Emoji(emoji.unicode)}</button>`;
         const currentLineValue = protyle.toolbar.range.startContainer.textContent.substring(0, start) || "";
         const key = this.getKey(currentLineValue, protyle.options.hint.extend);
         if (typeof key === "undefined" ||
-            (   // 除 emoji 提示外，其余在 inline-code 内移动不进行提示
-                this.splitChar !== ":" && hasClosestByAttribute(protyle.toolbar.range.startContainer, "data-type", "NodeCodeBlock")
-            )
-        ) {
+            hasClosestByAttribute(protyle.toolbar.range.startContainer, "data-type", "code") ||
+            hasClosestByAttribute(protyle.toolbar.range.startContainer, "data-type", "NodeCodeBlock")) {
             this.element.classList.add("fn__none");
             clearTimeout(this.timeId);
             return;
@@ -454,6 +453,7 @@ ${genHintItemHTML(item)}
                     avID,
                 }]);
             }
+            insertAttrViewBlockAnimation(nodeElement, 1, previousID);
             return;
         }
         this.enableExtend = false;
@@ -768,7 +768,7 @@ ${genHintItemHTML(item)}
                 } else if (value === "---") {
                     focusBlock(nodeElement);
                 } else if (nodeElement.classList.contains("av")) {
-                    avRender(nodeElement);
+                    avRender(nodeElement, protyle);
                 } else {
                     focusByWbr(nodeElement, range);
                 }
