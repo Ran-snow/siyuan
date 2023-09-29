@@ -242,41 +242,43 @@ func GetAnnouncements() (ret []*Announcement) {
 }
 
 func CheckUpdate(showMsg bool) {
-	if !showMsg {
-		return
-	}
+	// if !showMsg {
+	// 	return
+	// }
 
-	result, err := util.GetRhyResult(showMsg)
-	if nil != err {
-		return
-	}
+	// result, err := util.GetRhyResult(showMsg)
+	// if nil != err {
+	// 	return
+	// }
 
-	ver := result["ver"].(string)
-	releaseLang := result["release"].(string)
-	if releaseLangArg := result["release_"+Conf.Lang]; nil != releaseLangArg {
-		releaseLang = releaseLangArg.(string)
-	}
+	// ver := result["ver"].(string)
+	// releaseLang := result["release"].(string)
+	// if releaseLangArg := result["release_"+Conf.Lang]; nil != releaseLangArg {
+	// 	releaseLang = releaseLangArg.(string)
+	// }
 
-	var msg string
-	var timeout int
-	if isVersionUpToDate(ver) {
-		msg = Conf.Language(10)
-		timeout = 3000
-	} else {
-		msg = fmt.Sprintf(Conf.Language(9), "<a href=\""+releaseLang+"\">"+releaseLang+"</a>")
-		showMsg = true
-		timeout = 15000
-	}
-	if showMsg {
-		util.PushMsg(msg, timeout)
-		go func() {
-			defer logging.Recover()
-			checkDownloadInstallPkg()
-			if "" != getNewVerInstallPkgPath() {
-				util.PushMsg(Conf.Language(62), 15*1000)
-			}
-		}()
-	}
+	// var msg string
+	// var timeout int
+	// if isVersionUpToDate(ver) {
+	// 	msg = Conf.Language(10)
+	// 	timeout = 3000
+	// } else {
+	// 	msg = fmt.Sprintf(Conf.Language(9), "<a href=\""+releaseLang+"\">"+releaseLang+"</a>")
+	// 	showMsg = true
+	// 	timeout = 15000
+	// }
+	// if showMsg {
+	// 	util.PushMsg(msg, timeout)
+	// 	go func() {
+	// 		defer logging.Recover()
+	// 		checkDownloadInstallPkg()
+	// 		if "" != getNewVerInstallPkgPath() {
+	// 			util.PushMsg(Conf.Language(62), 15*1000)
+	// 		}
+	// 	}()
+	// }
+
+	return
 }
 
 func isVersionUpToDate(releaseVer string) bool {
