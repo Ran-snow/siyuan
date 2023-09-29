@@ -176,11 +176,12 @@ func CheckAuth(c *gin.Context) {
 				return
 			}
 
-			if !strings.HasPrefix(u.Host, util.LocalHost) && !strings.HasPrefix(u.Host, "[::1]") {
-				c.JSON(401, map[string]interface{}{"code": -1, "msg": "Auth failed: for security reasons, please set [Access authorization code] when using non-127.0.0.1 access\n\n为安全起见，使用非 127.0.0.1 访问时请设置 [访问授权码]"})
-				c.Abort()
-				return
-			}
+			// 限制非本机访问很无聊，此产品应专注于本职业务，安全性相关操作由其他组件完成更为合理
+			// if !strings.HasPrefix(u.Host, util.LocalHost) && !strings.HasPrefix(u.Host, "[::1]") {
+			// 	c.JSON(401, map[string]interface{}{"code": -1, "msg": "Auth failed: for security reasons, please set [Access authorization code] when using non-127.0.0.1 access\n\n为安全起见，使用非 127.0.0.1 访问时请设置 [访问授权码]"})
+			// 	c.Abort()
+			// 	return
+			// }
 		}
 
 		c.Next()
