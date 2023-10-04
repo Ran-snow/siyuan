@@ -6,7 +6,7 @@ import {getDefaultOperatorByType, setFilter} from "./filter";
 import {genCellValue} from "./cell";
 import {openMenuPanel} from "./openMenuPanel";
 import {getLabelByNumberFormat} from "./number";
-import {addAttrViewColAnimation, removeAttrViewColAnimation} from "./action";
+import {removeAttrViewColAnimation} from "./action";
 
 export const duplicateCol = (options: {
     protyle: IProtyle,
@@ -99,7 +99,6 @@ export const getEditHTML = (options: {
         <svg><use xlink:href="#iconLeft"></use></svg>
     </span>
     <span class="b3-menu__label ft__center">${window.siyuan.languages.edit}</span>
-    <svg class="b3-menu__action" data-type="close" style="opacity: 1"><use xlink:href="#iconCloseRound"></use></svg>
 </button>
 <button class="b3-menu__separator"></button>
 <button class="b3-menu__item">
@@ -110,7 +109,7 @@ export const getEditHTML = (options: {
         html += `<button class="b3-menu__separator"></button>
 <button class="b3-menu__item">
     <svg class="b3-menu__icon" style=""><use xlink:href="#iconAdd"></use></svg>
-    <span class="b3-menu__label"><input data-type="addOption"  style="margin: 4px 0" class="b3-text-field" type="text" placeholder="Enter ${window.siyuan.languages.addAttr}"></span>
+    <span class="b3-menu__label"><input data-type="addOption"  style="margin: 4px 0" class="b3-text-field fn__block" type="text" placeholder="Enter ${window.siyuan.languages.addAttr}"></span>
 </button>`;
         colData.options.forEach(item => {
             html += `<button class="b3-menu__item${html ? "" : " b3-menu__item--current"}" draggable="true" data-name="${item.name}" data-color="${item.color}">
@@ -130,6 +129,11 @@ export const getEditHTML = (options: {
     <svg class="b3-menu__icon"><use xlink:href="#iconFormat"></use></svg>
     <span class="b3-menu__label">${window.siyuan.languages.format}</span>
     <span class="b3-menu__accelerator">${getLabelByNumberFormat(colData.numberFormat)}</span>
+</button>`;
+    } else if (colData.type === "template") {
+        html += `<button class="b3-menu__separator"></button>
+<button class="b3-menu__item">
+    <textarea placeholder="${window.siyuan.languages.template}" data-type="updateTemplate" style="margin: 4px 0" rows="1" class="fn__block b3-text-field">${colData.template}</textarea>
 </button>`;
     }
     return `<div class="b3-menu__items">
@@ -186,6 +190,42 @@ export const bindEditEvent = (options: { protyle: IProtyle, data: IAV, menuEleme
             options.menuElement.parentElement.remove();
         }
     });
+
+    const tplElement = options.menuElement.querySelector('[data-type="updateTemplate"]') as HTMLTextAreaElement;
+    if (tplElement) {
+        tplElement.addEventListener("blur", () => {
+            const newValue = tplElement.value;
+            if (newValue === colData.template) {
+                return;
+            }
+            transaction(options.protyle, [{
+                action: "updateAttrViewColTemplate",
+                id: colId,
+                avID,
+                data: newValue,
+                type: colData.type,
+            }], [{
+                action: "updateAttrViewColTemplate",
+                id: colId,
+                avID,
+                data: colData.template,
+                type: colData.type,
+            }]);
+            colData.template = newValue;
+        });
+        tplElement.addEventListener("keydown", (event: KeyboardEvent) => {
+            if (event.isComposing) {
+                return;
+            }
+            if (event.key === "Escape") {
+                options.menuElement.parentElement.remove();
+            } else if (event.key === "Enter") {
+                tplElement.dispatchEvent(new CustomEvent("blur"));
+                options.menuElement.parentElement.remove();
+            }
+        });
+    }
+
     const addOptionElement = options.menuElement.querySelector('[data-type="addOption"]') as HTMLInputElement;
     if (!addOptionElement) {
         return;
@@ -252,6 +292,8 @@ export const getColIconByType = (type: TAVCol) => {
             return "iconEmail";
         case "phone":
             return "iconPhone";
+        case "template":
+            return "iconMath";
     }
 };
 
@@ -282,6 +324,42 @@ export const updateHeader = (rowElement: HTMLElement) => {
     counterElement.classList.remove("fn__none");
     counterElement.innerHTML = `${selectCount} selected`;
     avHeadElement.style.position = "sticky";
+};
+
+export const addAttrViewColAnimation = (options: {
+    blockElement: Element,
+    protyle: IProtyle,
+    type: TAVCol,
+    name: string,
+    previousId?: string,
+    id: string
+}) => {
+    if (!options.blockElement) {
+        return;
+    }
+    options.blockElement.querySelectorAll(".av__row").forEach((item, index) => {
+        let previousElement;
+        if (options.previousId) {
+            previousElement = item.querySelector(`[data-col-id="${options.previousId}"]`);
+        } else {
+            previousElement = item.lastElementChild.previousElementSibling;
+        }
+        let html = "";
+        if (index === 0) {
+            html = `<div class="av__cell" data-col-id="${options.id}" data-dtype="${options.type}" style="width: 200px;white-space: nowrap;">
+    <div draggable="true" class="av__cellheader">
+        <svg><use xlink:href="#${getColIconByType(options.type)}"></use></svg>
+        <span class="av__celltext">${options.name}</span>
+    </div>
+    <div class="av__widthdrag"></div>
+</div>`;
+        } else {
+            html = '<div class="av__cell" style="width: 200px"></div>';
+        }
+        previousElement.insertAdjacentHTML("afterend", html);
+    });
+    window.siyuan.menus.menu.remove();
+    showColMenu(options.protyle, options.blockElement, options.blockElement.querySelector(`.av__row--header .av__cell[data-col-id="${options.id}"]`));
 };
 
 export const showColMenu = (protyle: IProtyle, blockElement: Element, cellElement: HTMLElement) => {
@@ -471,8 +549,8 @@ export const showColMenu = (protyle: IProtyle, blockElement: Element, cellElemen
         menu.addSeparator();
     }
     menu.addItem({
-        label: `<div class="fn__flex" style="margin: 4px 0"><span>${window.siyuan.languages.wrap}</span><span class="fn__space fn__flex-1"></span>
-<input type="checkbox" class="b3-switch fn__flex-center"${cellElement.style.whiteSpace === "nowrap" ? "" : " checked"}></div>`,
+        label: `<label class="fn__flex" style="margin: 4px 0"><span>${window.siyuan.languages.wrap}</span><span class="fn__space fn__flex-1"></span>
+<input type="checkbox" class="b3-switch fn__flex-center"${cellElement.style.whiteSpace === "nowrap" ? "" : " checked"}></label>`,
         bind(element) {
             const inputElement = element.querySelector("input") as HTMLInputElement;
             inputElement.addEventListener("change", () => {
