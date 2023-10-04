@@ -2,7 +2,7 @@ FROM node:latest as NODE_BUILD
 WORKDIR /go/src/github.com/siyuan-note/siyuan/
 ADD . /go/src/github.com/siyuan-note/siyuan/
 RUN npm install --registry https://registry.npm.taobao.org -g pnpm 
-RUN cd app && ELECTRON_MIRROR=https://cnpmjs.org/mirrors/electron/ pnpm install electron@25.5.0 -D
+RUN cd app && ELECTRON_MIRROR=https://cnpmjs.org/mirrors/electron/ pnpm install electron@26.2.3 -D
 RUN cd app && pnpm --registry https://registry.npm.taobao.org install
 RUN cd app && pnpm run build
 

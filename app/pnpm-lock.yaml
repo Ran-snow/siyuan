@@ -2636,7 +2636,7 @@ packages:
     dependencies:
       big.js: 5.2.2
       emojis-list: 3.0.0
-      json5: 2.2.1
+      json5: 2.2.2
     dev: true
 
   /locate-path@5.0.0:
@@ -3106,7 +3106,7 @@ packages:
       dotenv: 9.0.2
       dotenv-expand: 5.1.0
       js-yaml: 4.1.0
-      json5: 2.2.1
+      json5: 2.2.2
       lazy-val: 1.0.5
     dev: true
 
