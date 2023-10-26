@@ -374,11 +374,11 @@ func ListDocTree(boxID, listPath string, sortMode int, flashcard, showHidden boo
 	switch sortMode {
 	case util.SortModeNameASC:
 		sort.Slice(docs, func(i, j int) bool {
-			return util.PinYinCompare(util.RemoveEmoji(docs[i].Name), util.RemoveEmoji(docs[j].Name))
+			return util.PinYinCompare(util.RemoveEmojiInvisible(docs[i].Name), util.RemoveEmojiInvisible(docs[j].Name))
 		})
 	case util.SortModeNameDESC:
 		sort.Slice(docs, func(i, j int) bool {
-			return util.PinYinCompare(util.RemoveEmoji(docs[j].Name), util.RemoveEmoji(docs[i].Name))
+			return util.PinYinCompare(util.RemoveEmojiInvisible(docs[j].Name), util.RemoveEmojiInvisible(docs[i].Name))
 		})
 	case util.SortModeUpdatedASC:
 		sort.Slice(docs, func(i, j int) bool { return docs[i].Mtime < docs[j].Mtime })
@@ -386,11 +386,11 @@ func ListDocTree(boxID, listPath string, sortMode int, flashcard, showHidden boo
 		sort.Slice(docs, func(i, j int) bool { return docs[i].Mtime > docs[j].Mtime })
 	case util.SortModeAlphanumASC:
 		sort.Slice(docs, func(i, j int) bool {
-			return natsort.Compare(util.RemoveEmoji(docs[i].Name), util.RemoveEmoji(docs[j].Name))
+			return natsort.Compare(util.RemoveEmojiInvisible(docs[i].Name), util.RemoveEmojiInvisible(docs[j].Name))
 		})
 	case util.SortModeAlphanumDESC:
 		sort.Slice(docs, func(i, j int) bool {
-			return natsort.Compare(util.RemoveEmoji(docs[j].Name), util.RemoveEmoji(docs[i].Name))
+			return natsort.Compare(util.RemoveEmojiInvisible(docs[j].Name), util.RemoveEmojiInvisible(docs[i].Name))
 		})
 	case util.SortModeCustom:
 		fileTreeFiles := docs
@@ -848,12 +848,6 @@ func loadNodesByMode(node *ast.Node, inputIndex, mode, size int, isDoc, isHeadin
 					if n.HeadingLevel <= level {
 						break
 					}
-				} else if ast.NodeSuperBlock == n.Type {
-					if h := treenode.SuperBlockHeading(n); nil != h {
-						if level >= h.HeadingLevel {
-							break
-						}
-					}
 				}
 				nodes = append(nodes, n)
 				count++
@@ -1124,14 +1118,21 @@ func MoveDocs(fromPaths []string, toBoxID, toPath string, callback interface{}) 
 		}
 	}
 
+	// A progress layer appears when moving more than 16 documents at once https://github.com/siyuan-note/siyuan/issues/9356
 	needShowProgress := 16 < len(fromPaths)
 	if needShowProgress {
-		util.PushEndlessProgress(Conf.Language(116))
+		defer util.PushClearProgress()
 	}
 
 	WaitForWritingFiles()
 	luteEngine := util.NewLute()
+	count := 0
 	for fromPath, fromBox := range pathsBoxes {
+		count++
+		if needShowProgress {
+			util.PushEndlessProgress(fmt.Sprintf(Conf.Language(70), fmt.Sprintf("%d/%d", count, len(fromPaths))))
+		}
+
 		_, err = moveDoc(fromBox, fromPath, toBox, toPath, luteEngine, callback)
 		if nil != err {
 			return
@@ -1139,12 +1140,6 @@ func MoveDocs(fromPaths []string, toBoxID, toPath string, callback interface{}) 
 	}
 	cache.ClearDocsIAL()
 	IncSync()
-
-	if needShowProgress {
-		util.PushEndlessProgress(Conf.Language(113))
-		sql.WaitForWritingDatabase()
-		util.ReloadUI()
-	}
 	return
 }
 
@@ -1453,7 +1448,7 @@ func CreateDailyNote(boxID string) (p string, existed bool, err error) {
 		if !gulu.File.IsExist(tplPath) {
 			logging.LogWarnf("not found daily note template [%s]", tplPath)
 		} else {
-			dom, err = renderTemplate(tplPath, id)
+			dom, err = renderTemplate(tplPath, id, false)
 			if nil != err {
 				logging.LogWarnf("render daily note template [%s] failed: %s", boxConf.DailyNoteTemplatePath, err)
 			}

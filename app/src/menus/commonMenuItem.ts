@@ -225,7 +225,7 @@ export const openFileAttr = (attrs: IObject, focusName = "bookmark", protyle?: I
             </label>
             ${notifyHTML}
         </div>
-        <div data-type="NodeAttributeView" class="fn__none custom-attr" data-av-id="${attrs["custom-avs"]}" data-node-id="${attrs.id}"></div>
+        <div data-type="NodeAttributeView" class="fn__none custom-attr"></div>
         <div data-type="custom" class="fn__none custom-attr">
            ${customHTML}
            <div class="b3-label">
@@ -245,6 +245,9 @@ export const openFileAttr = (attrs: IObject, focusName = "bookmark", protyle?: I
     (dialog.element.querySelector('.b3-text-field[data-name="alias"]') as HTMLInputElement).value = attrs.alias || "";
     dialog.element.addEventListener("click", (event) => {
         let target = event.target as HTMLElement;
+        if (typeof event.detail === "string") {
+            target = dialog.element.querySelector('.item--full[data-type="NodeAttributeView"]');
+        }
         while (!target.isSameNode(dialog.element)) {
             const type = target.dataset.action;
             if (target.classList.contains("item--full")) {
@@ -342,11 +345,14 @@ export const openFileAttr = (attrs: IObject, focusName = "bookmark", protyle?: I
         }
     });
     dialog.element.querySelectorAll(".b3-text-field").forEach((item: HTMLInputElement) => {
-        if (focusName === item.getAttribute("data-name")) {
+        if (focusName !== "av" && focusName === item.getAttribute("data-name")) {
             item.focus();
         }
         bindAttrInput(item, attrs.id);
     });
+    if (focusName === "av") {
+        dialog.element.dispatchEvent(new CustomEvent("click", {detail: "av"}));
+    }
 };
 
 export const openAttr = (nodeElement: Element, focusName = "bookmark", protyle?: IProtyle) => {
@@ -394,6 +400,7 @@ export const copySubMenu = (id: string, accelerator = true, focusElement?: Eleme
         }
     }, {
         label: window.siyuan.languages.copyProtocolInMd,
+        accelerator: accelerator ? window.siyuan.config.keymap.editor.general.copyProtocolInMd.custom : undefined,
         click: () => {
             fetchPost("/api/block/getRefText", {id}, (response) => {
                 writeText(`[${response.data}](siyuan://blocks/${id})`);
@@ -424,7 +431,7 @@ export const copySubMenu = (id: string, accelerator = true, focusElement?: Eleme
     }];
 };
 
-export const exportMd = (id: string) => {
+export const exportMd = (id: string, fileType = "NodeDocument") => {
     return new MenuItem({
         label: window.siyuan.languages.export,
         type: "submenu",
@@ -525,7 +532,7 @@ export const exportMd = (id: string) => {
             label: window.siyuan.languages.image,
             icon: "iconImage",
             click: () => {
-                exportImage(id);
+                exportImage(id, fileType);
             }
         },
             /// #if !BROWSER
@@ -533,26 +540,26 @@ export const exportMd = (id: string) => {
                 label: "PDF",
                 icon: "iconPDF",
                 click: () => {
-                    saveExport({type: "pdf", id});
+                    saveExport({type: "pdf", id, fileType});
                 }
             }, {
                 label: "HTML (SiYuan)",
                 iconClass: "ft__error",
                 icon: "iconHTML5",
                 click: () => {
-                    saveExport({type: "html", id});
+                    saveExport({type: "html", id, fileType});
                 }
             }, {
                 label: "HTML (Markdown)",
                 icon: "iconHTML5",
                 click: () => {
-                    saveExport({type: "htmlmd", id});
+                    saveExport({type: "htmlmd", id, fileType});
                 }
             }, {
                 label: "Word .docx",
                 icon: "iconExact",
                 click: () => {
-                    saveExport({type: "word", id});
+                    saveExport({type: "word", id, fileType});
                 }
             }, {
                 label: window.siyuan.languages.more,
@@ -739,6 +746,7 @@ export const openMenu = (app: App, src: string, onlyMenu: boolean, showAccelerat
     }
     window.siyuan.menus.menu.append(new MenuItem({
         label: window.siyuan.languages.openBy,
+        icon: "iconOpen",
         submenu
     }).element);
 };
@@ -751,6 +759,7 @@ export const renameMenu = (options: {
 }) => {
     return new MenuItem({
         accelerator: window.siyuan.config.keymap.editor.general.rename.custom,
+        icon: "iconEdit",
         label: window.siyuan.languages.rename,
         click: () => {
             rename(options);

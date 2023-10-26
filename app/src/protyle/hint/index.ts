@@ -61,10 +61,9 @@ export class Hint {
                 if (this.source !== "search") {
                     this.fill(decodeURIComponent(btnElement.getAttribute("data-value")), protyle, true, isCtrl(event));
                 } else {
-                    // 划选引用点击，需先重置 range
                     setTimeout(() => {
-                        this.fill(decodeURIComponent(btnElement.getAttribute("data-value")), protyle);
-                    }, 148);
+                        this.fill(decodeURIComponent(btnElement.getAttribute("data-value")), protyle, true, !isCtrl(event));
+                    }, 148);    // 划选引用点击，需先重置 range
                 }
                 focusByRange(protyle.toolbar.range);
 
@@ -303,8 +302,8 @@ ${unicode2Emoji(emoji.unicode)}</button>`;
                 upDownHint(this.element.lastElementChild, event);
                 if (event.key === "Enter") {
                     setTimeout(() => {
-                        this.fill(decodeURIComponent(this.element.querySelector(".b3-list-item--focus").getAttribute("data-value")), protyle);
-                    }, 148);
+                        this.fill(decodeURIComponent(this.element.querySelector(".b3-list-item--focus").getAttribute("data-value")), protyle, true, !isCtrl(event));
+                    }, 148);    // 划选引用点击，需先重置 range
                     focusByRange(protyle.toolbar.range);
                     event.preventDefault();
                 } else if (event.key === "Escape") {
@@ -368,7 +367,7 @@ ${genHintItemHTML(item)}
             }
             lazyLoadEmojiImg(panelElement);
         } else {
-            this.element.innerHTML = `<div class="emojis">
+            this.element.innerHTML = `<div style="padding: 0" class="emojis">
 <div class="emojis__panel">${filterEmoji(value, 256)}</div>
 <div class="fn__flex${value ? " fn__none" : ""}">
     <button data-type="0" class="emojis__type ariaLabel" aria-label="${window.siyuan.languages.recentEmoji}">${unicode2Emoji("2b50")}</button>
@@ -541,6 +540,12 @@ ${genHintItemHTML(item)}
                 if (staticText) {
                     tempElement.setAttribute("data-subtype", "s");
                     tempElement.innerText = staticText;
+                }
+            } else {
+                tempElement.setAttribute("data-subtype", "d");
+                const dynamicTexts = tempElement.innerText.split(Constants.ZWSP);
+                if (dynamicTexts.length === 2) {
+                    tempElement.innerText = dynamicTexts[1];
                 }
             }
             protyle.toolbar.setInlineMark(protyle, "block-ref", "range", {
@@ -767,8 +772,9 @@ ${genHintItemHTML(item)}
                     const rect = nodeElement.getBoundingClientRect();
                     window.siyuan.menus.menu.popup({
                         x: rect.left,
-                        y: rect.top
-                    }, true);
+                        y: rect.top,
+                        isLeft: true
+                    });
                     const itemElement = window.siyuan.menus.menu.element.querySelector('[data-id="assetSubMenu"]');
                     itemElement.classList.add("b3-menu__item--show");
                     window.siyuan.menus.menu.showSubMenu(itemElement.querySelector(".b3-menu__submenu"));

@@ -881,12 +881,6 @@ func heading(node *ast.Node) *ast.Node {
 	currentLevel := 16
 	if ast.NodeHeading == node.Type {
 		currentLevel = node.HeadingLevel
-	} else if ast.NodeSuperBlock == node.Type {
-		superBlockHeading := treenode.SuperBlockHeading(node)
-		if nil != superBlockHeading {
-			node = superBlockHeading
-			currentLevel = node.HeadingLevel
-		}
 	}
 
 	for prev := node.Previous; nil != prev; prev = prev.Previous {
@@ -1338,6 +1332,8 @@ func nSort(n *ast.Node) int {
 	case ast.NodeBlockquote:
 		return 20
 	case ast.NodeSuperBlock:
+		return 30
+	case ast.NodeAttributeView:
 		return 30
 	case ast.NodeText, ast.NodeTextMark:
 		if n.IsTextMarkType("tag") {

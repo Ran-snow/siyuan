@@ -3,7 +3,7 @@ import {getAllModels} from "../layout/getAll";
 import * as path from "path";
 /// #endif
 import {Constants} from "../constants";
-import {escapeAriaLabel, escapeAttr, escapeGreat, escapeHtml} from "../util/escape";
+import {escapeAriaLabel, escapeGreat, escapeHtml} from "../util/escape";
 import {fetchPost} from "../util/fetch";
 import {openFile, openFileById} from "../editor/util";
 import {showMessage} from "../dialog/message";
@@ -32,8 +32,10 @@ import {upDownHint} from "../util/upDownHint";
 import {
     assetFilterMenu,
     assetInputEvent,
-    assetMethodMenu, assetMoreMenu,
-    openSearchAsset, renderNextAssetMark,
+    assetMethodMenu,
+    assetMoreMenu,
+    openSearchAsset,
+    renderNextAssetMark,
     renderPreview,
     toggleAssetHistory
 } from "./assets";
@@ -365,6 +367,7 @@ export const genSearch = (app: App, config: ISearchOption, element: Element, clo
                         superBlock: window.siyuan.config.search.superBlock,
                         paragraph: window.siyuan.config.search.paragraph,
                         embedBlock: window.siyuan.config.search.embedBlock,
+                        databaseBlock: window.siyuan.config.search.databaseBlock,
                     }
                 }, config, edit);
                 element.querySelector(".b3-chip--current")?.classList.remove("b3-chip--current");
@@ -578,6 +581,7 @@ export const genSearch = (app: App, config: ISearchOption, element: Element, clo
                             superBlock: window.siyuan.config.search.superBlock,
                             paragraph: window.siyuan.config.search.paragraph,
                             embedBlock: window.siyuan.config.search.embedBlock,
+                            databaseBlock: window.siyuan.config.search.databaseBlock,
                         }
                     }, config, edit);
                     element.querySelector("#criteria .b3-chip--current")?.classList.remove("b3-chip--current");
@@ -634,7 +638,7 @@ export const genSearch = (app: App, config: ISearchOption, element: Element, clo
                     }).element);
                 });
                 const rect = target.getBoundingClientRect();
-                window.siyuan.menus.menu.popup({x: rect.right, y: rect.bottom}, true);
+                window.siyuan.menus.menu.popup({x: rect.right, y: rect.bottom, isLeft: true});
                 event.stopPropagation();
                 event.preventDefault();
                 break;
@@ -698,7 +702,7 @@ export const genSearch = (app: App, config: ISearchOption, element: Element, clo
                     inputEvent(element, config, undefined, edit, true);
                 });
                 const rect = target.getBoundingClientRect();
-                window.siyuan.menus.menu.popup({x: rect.right, y: rect.bottom}, true);
+                window.siyuan.menus.menu.popup({x: rect.right, y: rect.bottom, isLeft: true});
                 event.stopPropagation();
                 event.preventDefault();
                 break;
@@ -1337,6 +1341,20 @@ const inputEvent = (element: Element, config: ISearchOption, inputTimeout: numbe
     return inputTimeout;
 };
 
+const getAttr =(block:IBlock) => {
+    let attrHTML = "";
+    if (block.name) {
+        attrHTML += `<span class="b3-list-item__meta fn__flex" style="max-width: 30%"><svg class="b3-list-item__hinticon"><use xlink:href="#iconN"></use></svg><span class="b3-list-item__hinttext">${block.name}</span></span>`;
+    }
+    if (block.alias) {
+        attrHTML += `<span class="b3-list-item__meta fn__flex" style="max-width: 30%"><svg class="b3-list-item__hinticon"><use xlink:href="#iconA"></use></svg><span class="b3-list-item__hinttext">${block.alias}</span></span>`;
+    }
+    if (block.memo) {
+        attrHTML += `<span class="b3-list-item__meta fn__flex" style="max-width: 30%"><svg class="b3-list-item__hinticon"><use xlink:href="#iconM"></use></svg><span class="b3-list-item__hinttext">${block.memo}</span></span>`;
+    }
+    return attrHTML;
+};
+
 const onSearch = (data: IBlock[], edit: Protyle, element: Element, config: ISearchOption) => {
     let resultHTML = "";
     data.forEach((item, index) => {
@@ -1347,13 +1365,14 @@ const onSearch = (data: IBlock[], edit: Protyle, element: Element, config: ISear
     <svg class="b3-list-item__arrow b3-list-item__arrow--open"><use xlink:href="#iconRight"></use></svg>
 </span>
 ${unicode2Emoji(getNotebookIcon(item.box) || Constants.SIYUAN_IMAGE_NOTE, "b3-list-item__graphic", true)}
-<span class="b3-list-item__text ariaLabel" style="color: var(--b3-theme-on-surface)" aria-label="${escapeAttr(title)}">${escapeGreat(title)}</span>
+<span class="b3-list-item__text ariaLabel" style="color: var(--b3-theme-on-surface)" aria-label="${escapeAriaLabel(title)}">${escapeGreat(title)}</span>
 </div><div>`;
             item.children.forEach((childItem, childIndex) => {
                 resultHTML += `<div style="padding-left: 36px" data-type="search-item" class="b3-list-item${childIndex === 0 && index === 0 ? " b3-list-item--focus" : ""}" data-node-id="${childItem.id}" data-root-id="${childItem.rootID}">
 <svg class="b3-list-item__graphic"><use xlink:href="#${getIconByType(childItem.type)}"></use></svg>
 ${unicode2Emoji(childItem.ial.icon, "b3-list-item__graphic", true)}
 <span class="b3-list-item__text">${childItem.content}</span>
+${getAttr(childItem)}
 </div>`;
             });
             resultHTML += "</div>";
@@ -1362,6 +1381,7 @@ ${unicode2Emoji(childItem.ial.icon, "b3-list-item__graphic", true)}
 <svg class="b3-list-item__graphic"><use xlink:href="#${getIconByType(item.type)}"></use></svg>
 ${unicode2Emoji(item.ial.icon, "b3-list-item__graphic", true)}
 <span class="b3-list-item__text">${item.content}</span>
+${getAttr(item)}
 <span class="b3-list-item__meta b3-list-item__meta--ellipsis ariaLabel" aria-label="${escapeAriaLabel(title)}">${escapeGreat(title)}</span>
 </div>`;
         }

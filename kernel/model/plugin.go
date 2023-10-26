@@ -78,6 +78,13 @@ func LoadPetals(frontend string) (ret []*Petal) {
 		return
 	}
 
+	if !Conf.Bazaar.Trust {
+		// 移动端没有集市模块，所以要默认开启，桌面端和 Docker 容器需要用户手动确认过信任后才能开启
+		if util.ContainerStd == util.Container || util.ContainerDocker == util.Container {
+			return
+		}
+	}
+
 	petals := getPetals()
 	for _, petal := range petals {
 		_, petal.DisplayName, petal.Incompatible = bazaar.ParseInstalledPlugin(petal.Name, frontend)

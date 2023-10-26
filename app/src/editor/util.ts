@@ -12,15 +12,13 @@ import {fetchPost, fetchSyncPost} from "../util/fetch";
 import {focusBlock, focusByRange} from "../protyle/util/selection";
 import {onGet} from "../protyle/util/onGet";
 /// #if !BROWSER
-import {shell} from "electron";
-import {BrowserWindow, getCurrentWindow} from "@electron/remote";
+import {ipcRenderer, shell} from "electron";
 import {newCardModel} from "../card/newCardTab";
 /// #endif
 import {pushBack} from "../util/backForward";
 import {Asset} from "../asset";
 import {Layout} from "../layout";
 import {hasClosestBlock, hasClosestByAttribute, hasClosestByClassName,} from "../protyle/util/hasClosest";
-import {setTitle} from "../dialog/processSystem";
 import {zoomOut} from "../menus/protyle";
 import {countBlockWord, countSelectWord} from "../layout/status";
 import {showMessage} from "../dialog/message";
@@ -41,6 +39,9 @@ export const openFileById = async (options: {
     afterOpen?: () => void
 }) => {
     const response = await fetchSyncPost("/api/block/getBlockInfo", {id: options.id});
+    if (response.code === -1) {
+        return;
+    }
     if (response.code === 3) {
         showMessage(response.msg);
         return;
@@ -75,7 +76,7 @@ export const openAsset = (app: App, assetPath: string, page: number | string, po
     });
 };
 
-export const openFile = (options: IOpenFileOptions) => {
+export const openFile = async (options: IOpenFileOptions) => {
     if (typeof options.removeCurrentTab === "undefined") {
         options.removeCurrentTab = true;
     }
@@ -172,24 +173,17 @@ export const openFile = (options: IOpenFileOptions) => {
 
     /// #if !BROWSER
     // https://github.com/siyuan-note/siyuan/issues/7491
-    const currentWindowId = getCurrentWindow().id;
-    const hasMatch = BrowserWindow.getAllWindows().find(item => {
-        if (item.id === currentWindowId) {
-            return;
-        }
-        const ids = decodeURIComponent(new URL(item.webContents.getURL()).hash.substring(1)).split(Constants.ZWSP);
-        if (ids.includes(options.rootID) || ids.includes(options.assetPath)) {
-            item.focus();
-            const optionsClone = Object.assign({}, options);
-            delete optionsClone.app;
-            item.webContents.executeJavaScript(`window.newWindow.openFile(${JSON.stringify(optionsClone)});`);
-            if (options.afterOpen) {
-                options.afterOpen();
-            }
-            return true;
-        }
+    let hasMatch = false;
+    const optionsClone = Object.assign({}, options);
+    delete optionsClone.app;    // 防止 JSON.stringify 时产生递归
+    hasMatch = await ipcRenderer.invoke(Constants.SIYUAN_GET, {
+        cmd: Constants.SIYUAN_OPEN_FILE,
+        options: JSON.stringify(optionsClone),
     });
     if (hasMatch) {
+        if (options.afterOpen) {
+            options.afterOpen();
+        }
         return;
     }
     /// #endif
@@ -366,9 +360,9 @@ const switchEditor = (editor: Editor, options: IOpenFileOptions, allModels: IMod
             updateBacklinkGraph(allModels, editor.editor.protyle);
         });
     } else {
-        if (options.action.includes(Constants.CB_GET_HL)) {
+        if (options.action?.includes(Constants.CB_GET_HL)) {
             highlightById(editor.editor.protyle, options.id, true);
-        } else if (options.action.includes(Constants.CB_GET_FOCUS)) {
+        } else if (options.action?.includes(Constants.CB_GET_FOCUS)) {
             if (nodeElement) {
                 const newRange = focusBlock(nodeElement);
                 if (newRange) {
@@ -503,7 +497,6 @@ export const updatePanelByEditor = (options: {
     reload: boolean,
     resize: boolean
 }) => {
-    let title = window.siyuan.languages.siyuanNote;
     if (options.protyle && options.protyle.path) {
         // https://ld246.com/article/1637636106054/comment/1641485541929#comments
         if (options.protyle.element.classList.contains("fn__none") ||
@@ -512,9 +505,6 @@ export const updatePanelByEditor = (options: {
             )
         ) {
             return;
-        }
-        if (options.protyle.title) {
-            title = options.protyle.title.editElement.textContent;
         }
         if (options.resize) {
             resize(options.protyle);
@@ -548,7 +538,6 @@ export const updatePanelByEditor = (options: {
     const models = getAllModels();
     updateOutline(models, options.protyle, options.reload);
     updateBacklinkGraph(models, options.protyle);
-    setTitle(title);
 };
 
 export const isCurrentEditor = (blockId: string) => {

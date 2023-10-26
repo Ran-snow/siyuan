@@ -16,6 +16,7 @@ import {openFile} from "../editor/util";
 import {getDisplayName, movePathTo} from "../util/pathName";
 import {App} from "../index";
 import {resize} from "../protyle/util/resize";
+import {setStorageVal} from "../protyle/util/compatibility";
 
 export const genCardHTML = (options: {
     id: string,
@@ -57,7 +58,11 @@ export const genCardHTML = (options: {
     /// #endif
     return `<div class="card__main">
     ${iconsHTML}
-    <div class="card__block fn__flex-1${options.blocks.length === 0 ? " fn__none" : ""}${window.siyuan.config.flashcard.mark ? " card__block--hidemark" : ""}${window.siyuan.config.flashcard.superBlock ? " card__block--hidesb" : ""}${window.siyuan.config.flashcard.list ? " card__block--hideli" : ""}" data-type="render"></div>
+    <div class="card__block fn__flex-1 ${options.blocks.length === 0 ? "fn__none" : ""} 
+${window.siyuan.config.flashcard.mark ? "card__block--hidemark" : ""} 
+${window.siyuan.config.flashcard.superBlock ? "card__block--hidesb" : ""} 
+${window.siyuan.config.flashcard.heading ? "card__block--hideh" : ""} 
+${window.siyuan.config.flashcard.list ? "card__block--hideli" : ""}" data-type="render"></div>
     <div class="card__empty card__empty--space${options.blocks.length === 0 ? "" : " fn__none"}" data-type="empty">
         <div>🔮</div>
         ${window.siyuan.languages.noDueCard}
@@ -119,6 +124,10 @@ export const bindCardEvent = (options: {
     id?: string,
     dialog?: Dialog,
 }) => {
+    if (window.siyuan.storage[Constants.LOCAL_FLASHCARD].fullscreen) {
+        fullscreen(options.element.querySelector(".card__main"),
+            options.element.querySelector('[data-type="fullscreen"]'));
+    }
     let index = 0;
     const editor = new Protyle(options.app, options.element.querySelector("[data-type='render']") as HTMLElement, {
         blockId: "",
@@ -200,6 +209,8 @@ export const bindCardEvent = (options: {
                 fullscreen(options.element.querySelector(".card__main"),
                     options.element.querySelector('[data-type="fullscreen"]'));
                 resize(editor.protyle);
+                window.siyuan.storage[Constants.LOCAL_FLASHCARD].fullscreen = !window.siyuan.storage[Constants.LOCAL_FLASHCARD].fullscreen;
+                setStorageVal(Constants.LOCAL_FLASHCARD,  window.siyuan.storage[Constants.LOCAL_FLASHCARD]);
                 event.stopPropagation();
                 event.preventDefault();
                 return;
@@ -320,7 +331,7 @@ export const bindCardEvent = (options: {
             if (actionElements[0].classList.contains("fn__none")) {
                 return;
             }
-            editor.protyle.element.classList.remove("card__block--hidemark", "card__block--hideli", "card__block--hidesb");
+            editor.protyle.element.classList.remove("card__block--hidemark", "card__block--hideli", "card__block--hidesb", "card__block--hideh");
             actionElements[0].classList.add("fn__none");
             actionElements[1].querySelectorAll(".b3-button").forEach((element, btnIndex) => {
                 element.previousElementSibling.textContent = options.blocks[index].nextDues[btnIndex];
@@ -459,6 +470,9 @@ const nextCard = (options: {
     options.editor.protyle.element.classList.add("card__block--hide");
     if (window.siyuan.config.flashcard.superBlock) {
         options.editor.protyle.element.classList.add("card__block--hidesb");
+    }
+    if (window.siyuan.config.flashcard.heading) {
+        options.editor.protyle.element.classList.add("card__block--hideh");
     }
     if (window.siyuan.config.flashcard.list) {
         options.editor.protyle.element.classList.add("card__block--hideli");

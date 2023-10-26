@@ -49,8 +49,11 @@ func (tx *Transaction) doFoldHeading(operation *Operation) (ret *TxErr) {
 	children := treenode.HeadingChildren(heading)
 	for _, child := range children {
 		childrenIDs = append(childrenIDs, child.ID)
-		child.SetIALAttr("fold", "1")
-		child.SetIALAttr("heading-fold", "1")
+		ast.Walk(child, func(n *ast.Node, entering bool) ast.WalkStatus {
+			n.SetIALAttr("fold", "1")
+			n.SetIALAttr("heading-fold", "1")
+			return ast.WalkContinue
+		})
 	}
 	heading.SetIALAttr("fold", "1")
 	if err = tx.writeTree(tree); nil != err {
@@ -82,8 +85,11 @@ func (tx *Transaction) doUnfoldHeading(operation *Operation) (ret *TxErr) {
 
 	children := treenode.HeadingChildren(heading)
 	for _, child := range children {
-		child.RemoveIALAttr("heading-fold")
-		child.RemoveIALAttr("fold")
+		ast.Walk(child, func(n *ast.Node, entering bool) ast.WalkStatus {
+			n.RemoveIALAttr("heading-fold")
+			n.RemoveIALAttr("fold")
+			return ast.WalkContinue
+		})
 	}
 	heading.RemoveIALAttr("fold")
 	heading.RemoveIALAttr("heading-fold")
@@ -98,6 +104,7 @@ func (tx *Transaction) doUnfoldHeading(operation *Operation) (ret *TxErr) {
 	}
 	sql.UpsertTreeQueue(tree)
 
+	children = treenode.HeadingChildren(heading)
 	luteEngine := NewLute()
 	operation.RetData = renderBlockDOMByNodes(children, luteEngine)
 	return

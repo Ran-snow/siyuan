@@ -34,6 +34,8 @@ type TOperation =
     | "removeAttrViewColOption"
     | "updateAttrViewColOption"
     | "setAttrViewName"
+    | "doUpdateUpdated"
+    | "setAttrViewColIcon"
     | "setAttrViewFilters"
     | "setAttrViewSorts"
     | "setAttrViewColCalc"
@@ -45,10 +47,11 @@ type TEventBus = "ws-main" |
     "click-blockicon" | "click-editorcontent" | "click-pdf" | "click-editortitleicon" |
     "open-noneditableblock" |
     "open-menu-blockref" | "open-menu-fileannotationref" | "open-menu-tag" | "open-menu-link" | "open-menu-image" |
-    "open-menu-av" | "open-menu-content" | "open-menu-breadcrumbmore" |
+    "open-menu-av" | "open-menu-content" | "open-menu-breadcrumbmore" | "open-menu-doctree" |
     "open-siyuan-url-plugin" | "open-siyuan-url-block" |
+    "paste" |
     "input-search" |
-    "loaded-protyle" | "loaded-protyle-dynamic" |
+    "loaded-protyle" | "loaded-protyle-dynamic" | "loaded-protyle-static" |
     "destroy-protyle"
 type TAVCol =
     "text"
@@ -64,6 +67,8 @@ type TAVCol =
     | "phone"
     | "mAsset"
     | "template"
+    | "created"
+    | "updated"
 type THintSource = "search" | "av" | "hint";
 type TAVFilterOperator =
     "="
@@ -135,10 +140,6 @@ interface Window {
         writeImageClipboard(uri: string): void
         readClipboard(): string
         getBlockURL(): string
-    }
-
-    newWindow: {
-        openFile(options: IOpenFileOptions): void
     }
 
     Protyle: import("../protyle/method").default
@@ -236,6 +237,7 @@ interface ISearchOption {
         codeBlock: boolean
         htmlBlock: boolean
         embedBlock: boolean
+        databaseBlock: boolean
     }
 }
 
@@ -325,7 +327,6 @@ interface ISiyuan {
     storage?: {
         [key: string]: any
     },
-    printWin?: import("electron").BrowserWindow
     transactions?: {
         protyle: IProtyle,
         doOperations: IOperation[],
@@ -497,6 +498,12 @@ interface IPluginDockTab {
     show?: boolean
 }
 
+interface IExportOptions {
+    type: string,
+    id: string,
+    fileType: string
+}
+
 interface IOpenFileOptions {
     app: import("../index").App,
     searchData?: ISearchOption, // 搜索必填
@@ -654,6 +661,7 @@ interface IConfig {
         mark: boolean
         list: boolean
         superBlock: boolean
+        heading: boolean
         deck: boolean
         requestRetention: number
         maximumInterval: number
@@ -749,6 +757,7 @@ interface IConfig {
         sort: number
     }
     search: {
+        databaseBlock: boolean
         embedBlock: boolean
         htmlBlock: boolean
         document: boolean
@@ -1079,6 +1088,8 @@ interface IAVCellValue {
         content: string
     }
     date?: IAVCellDateValue
+    created?: IAVCellDateValue
+    updated?: IAVCellDateValue
 }
 
 interface IAVCellDateValue {

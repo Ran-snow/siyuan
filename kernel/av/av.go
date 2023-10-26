@@ -46,6 +46,45 @@ type AttributeView struct {
 	Views     []*View      `json:"views"`     // 视图
 }
 
+func ShallowCloneAttributeView(av *AttributeView) (ret *AttributeView) {
+	ret = &AttributeView{}
+	data, err := gulu.JSON.MarshalJSON(av)
+	if nil != err {
+		logging.LogErrorf("marshal attribute view [%s] failed: %s", av.ID, err)
+		return nil
+	}
+	if err = gulu.JSON.UnmarshalJSON(data, ret); nil != err {
+		logging.LogErrorf("unmarshal attribute view [%s] failed: %s", av.ID, err)
+		return nil
+	}
+
+	ret.ID = ast.NewNodeID()
+	view, err := ret.GetView()
+	if nil == err {
+		view.ID = ast.NewNodeID()
+		ret.ViewID = view.ID
+	} else {
+		view = NewView()
+		ret.ViewID = view.ID
+		ret.Views = append(ret.Views, view)
+	}
+
+	keyIDMap := map[string]string{}
+	for _, kv := range ret.KeyValues {
+		newID := ast.NewNodeID()
+		keyIDMap[kv.Key.ID] = newID
+		kv.Key.ID = newID
+		kv.Values = []*Value{}
+	}
+
+	view.Table.ID = ast.NewNodeID()
+	for _, column := range view.Table.Columns {
+		column.ID = keyIDMap[column.ID]
+	}
+	view.Table.RowIDs = []string{}
+	return
+}
+
 // KeyValues 描述了属性视图属性列值的结构。
 type KeyValues struct {
 	Key    *Key     `json:"key"`              // 属性视图属性列
@@ -66,6 +105,8 @@ const (
 	KeyTypePhone    KeyType = "phone"
 	KeyTypeMAsset   KeyType = "mAsset"
 	KeyTypeTemplate KeyType = "template"
+	KeyTypeCreated  KeyType = "created"
+	KeyTypeUpdated  KeyType = "updated"
 )
 
 // Key 描述了属性视图属性列的基础结构。
@@ -82,11 +123,12 @@ type Key struct {
 	Template     string             `json:"template"`          // 模板内容
 }
 
-func NewKey(id, name string, keyType KeyType) *Key {
+func NewKey(id, name, icon string, keyType KeyType) *Key {
 	return &Key{
 		ID:   id,
 		Name: name,
 		Type: keyType,
+		Icon: icon,
 	}
 }
 
@@ -96,11 +138,12 @@ type KeySelectOption struct {
 }
 
 type Value struct {
-	ID         string  `json:"id,omitempty"`
-	KeyID      string  `json:"keyID,omitempty"`
-	BlockID    string  `json:"blockID,omitempty"`
-	Type       KeyType `json:"type,omitempty"`
-	IsDetached bool    `json:"isDetached,omitempty"`
+	ID            string  `json:"id,omitempty"`
+	KeyID         string  `json:"keyID,omitempty"`
+	BlockID       string  `json:"blockID,omitempty"`
+	Type          KeyType `json:"type,omitempty"`
+	IsDetached    bool    `json:"isDetached,omitempty"`
+	IsInitialized bool    `json:"isInitialized,omitempty"`
 
 	Block    *ValueBlock    `json:"block,omitempty"`
 	Text     *ValueText     `json:"text,omitempty"`
@@ -112,38 +155,85 @@ type Value struct {
 	Phone    *ValuePhone    `json:"phone,omitempty"`
 	MAsset   []*ValueAsset  `json:"mAsset,omitempty"`
 	Template *ValueTemplate `json:"template,omitempty"`
+	Created  *ValueCreated  `json:"created,omitempty"`
+	Updated  *ValueUpdated  `json:"updated,omitempty"`
 }
 
 func (value *Value) String() string {
 	switch value.Type {
 	case KeyTypeBlock:
+		if nil == value.Block {
+			return ""
+		}
 		return value.Block.Content
 	case KeyTypeText:
+		if nil == value.Text {
+			return ""
+		}
 		return value.Text.Content
 	case KeyTypeNumber:
+		if nil == value.Number {
+			return ""
+		}
 		return value.Number.FormattedContent
 	case KeyTypeDate:
+		if nil == value.Date {
+			return ""
+		}
 		return value.Date.FormattedContent
+	case KeyTypeSelect:
+		if 1 > len(value.MSelect) {
+			return ""
+		}
+		return value.MSelect[0].Content
 	case KeyTypeMSelect:
+		if 1 > len(value.MSelect) {
+			return ""
+		}
 		var ret []string
 		for _, v := range value.MSelect {
 			ret = append(ret, v.Content)
 		}
 		return strings.Join(ret, " ")
 	case KeyTypeURL:
+		if nil == value.URL {
+			return ""
+		}
 		return value.URL.Content
 	case KeyTypeEmail:
+		if nil == value.Email {
+			return ""
+		}
 		return value.Email.Content
 	case KeyTypePhone:
+		if nil == value.Phone {
+			return ""
+		}
 		return value.Phone.Content
 	case KeyTypeMAsset:
+		if 1 > len(value.MAsset) {
+			return ""
+		}
 		var ret []string
 		for _, v := range value.MAsset {
 			ret = append(ret, v.Content)
 		}
 		return strings.Join(ret, " ")
 	case KeyTypeTemplate:
+		if nil == value.Template {
+			return ""
+		}
 		return value.Template.Content
+	case KeyTypeCreated:
+		if nil == value.Created {
+			return ""
+		}
+		return value.Created.FormattedContent
+	case KeyTypeUpdated:
+		if nil == value.Updated {
+			return ""
+		}
+		return value.Updated.FormattedContent
 	default:
 		return ""
 	}
@@ -160,6 +250,8 @@ func (value *Value) ToJSONString() string {
 type ValueBlock struct {
 	ID      string `json:"id"`
 	Content string `json:"content"`
+	Created int64  `json:"created"`
+	Updated int64  `json:"updated"`
 }
 
 type ValueText struct {
@@ -354,6 +446,76 @@ type ValueTemplate struct {
 	Content string `json:"content"`
 }
 
+type ValueCreated struct {
+	Content          int64  `json:"content"`
+	IsNotEmpty       bool   `json:"isNotEmpty"`
+	Content2         int64  `json:"content2"`
+	IsNotEmpty2      bool   `json:"isNotEmpty2"`
+	FormattedContent string `json:"formattedContent"`
+}
+
+type CreatedFormat string
+
+const (
+	CreatedFormatNone     CreatedFormat = "" // 2006-01-02 15:04
+	CreatedFormatDuration CreatedFormat = "duration"
+)
+
+func NewFormattedValueCreated(content, content2 int64, format CreatedFormat) (ret *ValueCreated) {
+	formatted := time.UnixMilli(content).Format("2006-01-02 15:04")
+	if 0 < content2 {
+		formatted += " → " + time.UnixMilli(content2).Format("2006-01-02 15:04")
+	}
+	switch format {
+	case CreatedFormatNone:
+	case CreatedFormatDuration:
+		t1 := time.UnixMilli(content)
+		t2 := time.UnixMilli(content2)
+		formatted = util.HumanizeRelTime(t1, t2, util.Lang)
+	}
+	ret = &ValueCreated{
+		Content:          content,
+		Content2:         content2,
+		FormattedContent: formatted,
+	}
+	return
+}
+
+type ValueUpdated struct {
+	Content          int64  `json:"content"`
+	IsNotEmpty       bool   `json:"isNotEmpty"`
+	Content2         int64  `json:"content2"`
+	IsNotEmpty2      bool   `json:"isNotEmpty2"`
+	FormattedContent string `json:"formattedContent"`
+}
+
+type UpdatedFormat string
+
+const (
+	UpdatedFormatNone     UpdatedFormat = "" // 2006-01-02 15:04
+	UpdatedFormatDuration UpdatedFormat = "duration"
+)
+
+func NewFormattedValueUpdated(content, content2 int64, format UpdatedFormat) (ret *ValueUpdated) {
+	formatted := time.UnixMilli(content).Format("2006-01-02 15:04")
+	if 0 < content2 {
+		formatted += " → " + time.UnixMilli(content2).Format("2006-01-02 15:04")
+	}
+	switch format {
+	case UpdatedFormatNone:
+	case UpdatedFormatDuration:
+		t1 := time.UnixMilli(content)
+		t2 := time.UnixMilli(content2)
+		formatted = util.HumanizeRelTime(t1, t2, util.Lang)
+	}
+	ret = &ValueUpdated{
+		Content:          content,
+		Content2:         content2,
+		FormattedContent: formatted,
+	}
+	return
+}
+
 // View 描述了视图的结构。
 type View struct {
 	ID   string `json:"id"`   // 视图 ID
@@ -397,7 +559,7 @@ type Viewable interface {
 
 func NewAttributeView(id string) (ret *AttributeView) {
 	view := NewView()
-	key := NewKey(ast.NewNodeID(), "Block", KeyTypeBlock)
+	key := NewKey(ast.NewNodeID(), "Block", "", KeyTypeBlock)
 	ret = &AttributeView{
 		Spec:      0,
 		ID:        id,
@@ -431,6 +593,43 @@ func ParseAttributeView(avID string) (ret *AttributeView, err error) {
 }
 
 func SaveAttributeView(av *AttributeView) (err error) {
+	// 做一些数据兼容和订正处理
+	now := util.CurrentTimeMillis()
+	for _, kv := range av.KeyValues {
+		if KeyTypeBlock == kv.Key.Type {
+			// 补全 block 的创建时间和更新时间
+			for _, v := range kv.Values {
+				if 0 == v.Block.Created {
+					if "" == v.Block.ID {
+						v.Block.ID = v.BlockID
+						if "" == v.Block.ID {
+							v.Block.ID = ast.NewNodeID()
+							v.BlockID = v.Block.ID
+						}
+					}
+
+					createdStr := v.Block.ID[:len("20060102150405")]
+					created, parseErr := time.ParseInLocation("20060102150405", createdStr, time.Local)
+					if nil == parseErr {
+						v.Block.Created = created.UnixMilli()
+					} else {
+						v.Block.Created = now
+					}
+				}
+				if 0 == v.Block.Updated {
+					v.Block.Updated = now
+				}
+			}
+		}
+	}
+
+	// 数据订正 - 行去重
+	for _, view := range av.Views {
+		if nil != view.Table {
+			view.Table.RowIDs = gulu.Str.RemoveDuplicatedElem(view.Table.RowIDs)
+		}
+	}
+
 	data, err := gulu.JSON.MarshalIndentJSON(av, "", "\t") // TODO: single-line for production
 	if nil != err {
 		logging.LogErrorf("marshal attribute view [%s] failed: %s", av.ID, err)
@@ -492,4 +691,8 @@ func GetAttributeViewDataPath(avID string) (ret string) {
 var (
 	ErrViewNotFound = errors.New("view not found")
 	ErrKeyNotFound  = errors.New("key not found")
+)
+
+const (
+	NodeAttrNameAvs = "custom-avs" // 用于标记块所属的属性视图，逗号分隔 av id
 )
