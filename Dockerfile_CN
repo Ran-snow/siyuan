@@ -45,3 +45,25 @@ ENTRYPOINT ["/opt/siyuan/kernel"]
 
 # docker buildx build --platform linux/amd64 -t test/siyuan:xxx .
 # docker run --restart=always -d -v /home/siyuan:/opt/siyuan/workspace/ -p 80:6806 --name siyuan_001 test/siyuan:xxx --workspace=/opt/siyuan/workspace/
+
+# git branch -v
+# git pull siyuan master:siyuan
+# git tag 2.10.13
+# git push
+# git push --tag
+
+# docker run \
+#   --name siyuan_001 \
+#   --restart=always \
+#   -d \
+#   -p 80:6806 \
+#   -v /home/siyuan:/opt/siyuan/workspace/ \
+#   ghcr.io/ran-snow/siyuan:2.10.13 \
+#   --workspace=/opt/siyuan/workspace/ \
+  
+# docker run \
+#   --name siyuan_001 \
+#   --restart=always \
+#   -d \
+#   -p 80:6806 \
+#   ghcr.io/ran-snow/siyuan:2.10.13 \
