@@ -19,7 +19,6 @@ package model
 import (
 	"image/color"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
