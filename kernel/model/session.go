@@ -97,7 +97,7 @@ func LoginAuth(c *gin.Context) {
 
 		if err := session.Save(c); nil != err {
 			logging.LogErrorf("save session failed: " + err.Error())
-			c.Status(500)
+			c.Status(http.StatusInternalServerError)
 			return
 		}
 		return
@@ -108,7 +108,7 @@ func LoginAuth(c *gin.Context) {
 	workspaceSession.Captcha = gulu.Rand.String(7)
 	if err := session.Save(c); nil != err {
 		logging.LogErrorf("save session failed: " + err.Error())
-		c.Status(500)
+		c.Status(http.StatusInternalServerError)
 		return
 	}
 }
@@ -122,7 +122,7 @@ func GetCaptcha(c *gin.Context) {
 	})
 	if nil != err {
 		logging.LogErrorf("generates captcha failed: " + err.Error())
-		c.Status(500)
+		c.Status(http.StatusInternalServerError)
 		return
 	}
 
@@ -131,16 +131,16 @@ func GetCaptcha(c *gin.Context) {
 	workspaceSession.Captcha = img.Text
 	if err = session.Save(c); nil != err {
 		logging.LogErrorf("save session failed: " + err.Error())
-		c.Status(500)
+		c.Status(http.StatusInternalServerError)
 		return
 	}
 
 	if err = img.WriteImage(c.Writer); nil != err {
 		logging.LogErrorf("writes captcha image failed: " + err.Error())
-		c.Status(500)
+		c.Status(http.StatusInternalServerError)
 		return
 	}
-	c.Status(200)
+	c.Status(http.StatusOK)
 }
 
 func CheckReadonly(c *gin.Context) {
@@ -149,7 +149,7 @@ func CheckReadonly(c *gin.Context) {
 		result.Code = -1
 		result.Msg = Conf.Language(34)
 		result.Data = map[string]interface{}{"closeTimeout": 5000}
-		c.JSON(200, result)
+		c.JSON(http.StatusOK, result)
 		c.Abort()
 		return
 	}
@@ -192,7 +192,7 @@ func Timing(c *gin.Context) {
 func Recover(c *gin.Context) {
 	defer func() {
 		logging.Recover()
-		c.Status(500)
+		c.Status(http.StatusInternalServerError)
 	}()
 
 	c.Next()

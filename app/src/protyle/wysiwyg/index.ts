@@ -64,7 +64,7 @@ import {openGlobalSearch} from "../../search/util";
 import {popSearch} from "../../mobile/menu/search";
 /// #endif
 import {BlockPanel} from "../../block/Panel";
-import {isCtrl, isInIOS, openByMobile} from "../util/compatibility";
+import {isInIOS, isOnlyMeta, openByMobile} from "../util/compatibility";
 import {MenuItem} from "../../menus/Menu";
 import {fetchPost} from "../../util/fetch";
 import {onGet} from "../util/onGet";
@@ -383,10 +383,13 @@ export class WYSIWYG {
                 const dragColId = dragElement.getAttribute("data-col-id");
                 let newWidth: string;
                 documentSelf.onmousemove = (moveEvent: MouseEvent) => {
-                    newWidth = Math.max(oldWidth + (moveEvent.clientX - event.clientX), 100) + "px";
-                    dragElement.parentElement.parentElement.querySelectorAll(".av__row, .av__row--footer").forEach(item => {
-                        (item.querySelector(`[data-col-id="${dragColId}"]`) as HTMLElement).style.width = newWidth;
-                    });
+                    newWidth = Math.max(oldWidth + (moveEvent.clientX - event.clientX), 58) + "px";
+                    const scrollElement = hasClosestByClassName(dragElement, "av__scroll");
+                    if (scrollElement) {
+                        scrollElement.querySelectorAll(".av__row, .av__row--footer").forEach(item => {
+                            (item.querySelector(`[data-col-id="${dragColId}"]`) as HTMLElement).style.width = newWidth;
+                        });
+                    }
                 };
 
                 documentSelf.onmouseup = () => {
@@ -453,8 +456,6 @@ export class WYSIWYG {
                         }
                     } else {
                         dragElement.parentElement.parentElement.style.width = (parseInt(dragElement.style.width) + 10) + "px";
-                        // 历史兼容
-                        dragElement.parentElement.parentElement.style.maxWidth = "";
                     }
                 };
 
@@ -1454,6 +1455,11 @@ export class WYSIWYG {
                 if (embedElement) {
                     protyle.gutter.render(protyle, embedElement, this.element);
                 } else {
+                    // database 行块标
+                    const rowElement = hasClosestByClassName(event.target, "av__row");
+                    if (rowElement && rowElement.dataset.id) {
+                        rowElement.firstElementChild.setAttribute("style", `left:${rowElement.parentElement.parentElement.getBoundingClientRect().left - 44}px;top:${rowElement.getBoundingClientRect().top}px`);
+                    }
                     protyle.gutter.render(protyle, nodeElement, this.element);
                 }
             }
@@ -1579,7 +1585,7 @@ export class WYSIWYG {
                 return;
             }
 
-            if ((event.shiftKey || isCtrl(event)) && !event.isComposing && range.toString() !== "") {
+            if ((event.shiftKey || isOnlyMeta(event)) && !event.isComposing && range.toString() !== "") {
                 // 工具栏
                 protyle.toolbar.render(protyle, range, event);
                 countSelectWord(range);
@@ -1631,7 +1637,7 @@ export class WYSIWYG {
                 });
             });
             hideElements(["hint", "util"], protyle);
-            const ctrlIsPressed = event.metaKey || event.ctrlKey;
+            const ctrlIsPressed = isOnlyMeta(event);
             /// #if !MOBILE
             const backlinkBreadcrumbItemElement = hasClosestByClassName(event.target, "protyle-breadcrumb__item");
             if (backlinkBreadcrumbItemElement) {
@@ -1708,10 +1714,6 @@ export class WYSIWYG {
                     activeBlur();
                     hideKeyboardToolbar();
                     /// #else
-                    if (aElement) {
-                        window.open(aLink);
-                        return;
-                    }
                     if (event.shiftKey) {
                         openFileById({
                             app: protyle.app,
