@@ -76,9 +76,9 @@ export const initStatus = (isWindow = false) => {
                     icon: "iconFeedback",
                     click: () => {
                         if ("zh_CN" === window.siyuan.config.lang || "zh_CHT" === window.siyuan.config.lang) {
-                            window.open("https://ld246.com/article/1649901726096");
+                            window.open("https://0.0.0.0/article/1649901726096");
                         } else {
-                            window.open("https://liuyun.io/article/1686530886208");
+                            window.open("https://0.0.0.0/article/1686530886208");
                         }
                     }
                 }).element);
@@ -95,7 +95,7 @@ export const initStatus = (isWindow = false) => {
                     label: window.siyuan.languages["_trayMenu"].officialWebsite,
                     icon: "iconSiYuan",
                     click: () => {
-                        window.open("https://b3log.org/siyuan");
+                        window.open("https://0.0.0.0/siyuan");
                     }
                 }).element);
                 window.siyuan.menus.menu.append(new MenuItem({

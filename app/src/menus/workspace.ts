@@ -401,9 +401,9 @@ export const workspaceMenu = (app: App, rect: DOMRect) => {
             icon: "iconFeedback",
             click: () => {
                 if ("zh_CN" === window.siyuan.config.lang || "zh_CHT" === window.siyuan.config.lang) {
-                    window.open("https://ld246.com/article/1649901726096");
+                    window.open("https://0.0.0.0/article/1649901726096");
                 } else {
-                    window.open("https://liuyun.io/article/1686530886208");
+                    window.open("https://0.0.0.0/article/1686530886208");
                 }
             }
         }).element);
