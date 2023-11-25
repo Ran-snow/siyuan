@@ -69,4 +69,4 @@ ENTRYPOINT ["/opt/siyuan/kernel"]
 #   --restart=always \
 #   -d \
 #   -p 80:6806 \
-#   ghcr.io/ran-snow/siyuan:2.10.13 \
+#   ghcr.io/ran-snow/siyuan
