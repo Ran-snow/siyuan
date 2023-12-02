@@ -42,9 +42,22 @@ import (
 var Mode = "prod"
 
 const (
-	Ver       = "2.10.16"
+	Ver       = "2.11.0"
 	IsInsider = false
 )
+
+var (
+	RunInContainer             = false // 是否运行在容器中
+	SiyuanAccessAuthCodeBypass = false // 是否跳过空访问授权码检查
+)
+
+func initEnvVars() {
+	RunInContainer = isRunningInDockerContainer()
+	var err error
+	if SiyuanAccessAuthCodeBypass, err = strconv.ParseBool(os.Getenv("SIYUAN_ACCESS_AUTH_CODE_BYPASS")); nil != err {
+		SiyuanAccessAuthCodeBypass = false
+	}
+}
 
 var (
 	bootProgress float64 // 启动进度，从 0 到 100
@@ -53,6 +66,7 @@ var (
 )
 
 func Boot() {
+	initEnvVars()
 	IncBootProgress(3, "Booting kernel...")
 	rand.Seed(time.Now().UTC().UnixNano())
 	initMime()
@@ -79,7 +93,7 @@ func Boot() {
 	ReadOnly, _ = strconv.ParseBool(*readOnly)
 	AccessAuthCode = *accessAuthCode
 	Container = ContainerStd
-	if isRunningInDockerContainer() {
+	if RunInContainer {
 		Container = ContainerDocker
 		if "" == AccessAuthCode {
 			// The access authorization code command line parameter must be set when deploying via Docker https://github.com/siyuan-note/siyuan/issues/9328
