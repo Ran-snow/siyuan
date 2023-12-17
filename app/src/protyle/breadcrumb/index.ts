@@ -2,7 +2,7 @@ import {getIconByType} from "../../editor/getIcon";
 import {fetchPost} from "../../util/fetch";
 import {Constants} from "../../constants";
 import {MenuItem} from "../../menus/Menu";
-import {fullscreen, netImg2LocalAssets} from "./action";
+import {fullscreen, net2LocalAssets} from "./action";
 import {openFileAttr} from "../../menus/commonMenuItem";
 import {setEditMode} from "../util/setEditMode";
 import {RecordMedia} from "../util/RecordMedia";
@@ -335,10 +335,18 @@ export class Breadcrumb {
             if (!protyle.disabled) {
                 window.siyuan.menus.menu.append(new MenuItem({
                     label: window.siyuan.languages.netImg2LocalAsset,
-                    icon: "iconTransform",
+                    icon: "iconImgDown",
                     accelerator: window.siyuan.config.keymap.editor.general.netImg2LocalAsset.custom,
                     click() {
-                        netImg2LocalAssets(protyle);
+                        net2LocalAssets(protyle, "Img");
+                    }
+                }).element);
+                window.siyuan.menus.menu.append(new MenuItem({
+                    label: window.siyuan.languages.netAssets2LocalAssets,
+                    icon: "iconTransform",
+                    accelerator: window.siyuan.config.keymap.editor.general.netAssets2LocalAssets.custom,
+                    click() {
+                        net2LocalAssets(protyle, "Assets");
                     }
                 }).element);
                 window.siyuan.menus.menu.append(new MenuItem({
@@ -447,7 +455,7 @@ export class Breadcrumb {
                     type: "submenu",
                     submenu: [{
                         iconHTML: "",
-                        current: !isCustomReadonly || isCustomReadonly === "true",
+                        current: isCustomReadonly === "true",
                         label: window.siyuan.languages.enable,
                         click() {
                             fetchPost("/api/attr/setBlockAttrs", {
@@ -457,7 +465,7 @@ export class Breadcrumb {
                         }
                     }, {
                         iconHTML: "",
-                        current: isCustomReadonly === "false",
+                        current: !isCustomReadonly || isCustomReadonly === "false",
                         label: window.siyuan.languages.disable,
                         click() {
                             fetchPost("/api/attr/setBlockAttrs", {

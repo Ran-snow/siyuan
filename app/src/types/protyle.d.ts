@@ -8,6 +8,12 @@ interface ILuteNode {
     };
 }
 
+type TTurnIntoOne = "BlocksMergeSuperBlock" | "Blocks2ULs" | "Blocks2OLs" | "Blocks2TLs" | "Blocks2Blockquote"
+
+type TTurnIntoOneSub = "row" | "col"
+
+type TTurnInto = "Blocks2Ps" | "Blocks2Hs"
+
 type ILuteRenderCallback = (node: ILuteNode, entering: boolean) => [string, number];
 
 /** @link https://ld246.com/article/1588412297062 */
@@ -387,8 +393,8 @@ interface IOptions {
     action?: string[],
     mode?: TEditorMode,
     blockId: string
+    rootId?: string
     key?: string
-    scrollAttr?: IScrollAttr
     defId?: string
     render?: {
         background?: boolean
@@ -425,6 +431,8 @@ interface IOptions {
 
 interface IProtyle {
     getInstance: () => import("../protyle").Protyle,
+    observerLoad?: ResizeObserver,
+    observer?: ResizeObserver,
     app: import("../index").App,
     transactionTime: number,
     id: string,

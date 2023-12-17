@@ -47,6 +47,18 @@ export const matchHotKey = (hotKey: string, event: KeyboardEvent) => {
         return false;
     }
 
+    // https://github.com/siyuan-note/siyuan/issues/9770
+    if (hotKey.startsWith("⌃") && !isMac()) {
+        if (hotKey === "⌃D") {
+            // https://github.com/siyuan-note/siyuan/issues/9841
+            return false;
+        }
+        hotKey = hotKey.replace("⌘", "").replace("⌃", "⌘")
+            .replace("⌘⇧", "⇧⌘")
+            .replace("⌘⌥⇧", "⌥⇧⌘")
+            .replace("⌘⌥", "⌥⌘");
+    }
+
     // []
     if (hotKey.indexOf("⇧") === -1 && hotKey.indexOf("⌘") === -1 && hotKey.indexOf("⌥") === -1 && hotKey.indexOf("⌃") === -1) {
         if (isNotCtrl(event) && !event.altKey && !event.shiftKey && hotKey === Constants.KEYCODELIST[event.keyCode]) {

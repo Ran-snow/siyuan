@@ -21,7 +21,7 @@ import {removeEmbed} from "../wysiwyg/removeEmbed";
 import {getContenteditableElement, getTopAloneElement, isNotEditBlock} from "../wysiwyg/getBlock";
 import * as dayjs from "dayjs";
 import {fetchPost, fetchSyncPost} from "../../util/fetch";
-import {cancelSB, insertEmptyBlock, jumpToParentNext} from "../../block/util";
+import {cancelSB, genEmptyElement, insertEmptyBlock, jumpToParentNext} from "../../block/util";
 import {countBlockWord} from "../../layout/status";
 import {Constants} from "../../constants";
 import {mathRender} from "../render/mathRender";
@@ -68,7 +68,14 @@ export class Gutter {
             const ghostElement = document.createElement("div");
             ghostElement.className = protyle.wysiwyg.element.className;
             selectElements.forEach(item => {
-                ghostElement.append(item.cloneNode(true));
+                if (item.getAttribute("data-type") === "NodeIFrame") {
+                    const embedElement = genEmptyElement();
+                    embedElement.classList.add("protyle-wysiwyg--select");
+                    getContenteditableElement(embedElement).innerHTML = "<svg class=\"svg\"><use xlink:href=\"#iconLanguage\"></use></svg> IFrame";
+                    ghostElement.append(embedElement);
+                } else {
+                    ghostElement.append(item.cloneNode(true));
+                }
             });
             ghostElement.setAttribute("style", `position:fixed;opacity:.1;width:${selectElements[0].clientWidth}px;padding:0;`);
             document.body.append(ghostElement);
@@ -401,8 +408,8 @@ export class Gutter {
         label: string,
         protyle: IProtyle,
         selectsElement: Element[],
-        type: string,
-        level?: string
+        type: TTurnIntoOne,
+        level?: TTurnIntoOneSub
     }) {
         return {
             icon: options.icon,
@@ -419,8 +426,8 @@ export class Gutter {
         label: string,
         protyle: IProtyle,
         selectsElement: Element[],
-        type: string,
-        level?: number | string,
+        type: TTurnInto,
+        level?: number,
         isContinue?: boolean
         accelerator?: string
     }) {
@@ -896,7 +903,6 @@ export class Gutter {
                 accelerator: window.siyuan.config.keymap.editor.heading.paragraph.custom,
                 protyle,
                 selectsElement: [nodeElement],
-                level: 6,
                 type: "Blocks2Ps",
             }));
             if (subType !== "h1") {
