@@ -332,13 +332,13 @@ export const genSearch = (app: App, config: ISearchOption, element: Element, clo
         </div>
         <div class="fn__space"></div>
         <svg class="fn__rotate fn__none svg" style="padding: 0 8px;align-self: center;margin-right: 8px"><use xlink:href="#iconRefresh"></use></svg>
-        <span id="replaceFilter" aria-label="${window.siyuan.languages.type}" class="block__icon ariaLabel fn__flex-center" data-position="9bottom">
+        <span id="replaceFilter" aria-label="${window.siyuan.languages.replaceType}" class="block__icon ariaLabel fn__flex-center" data-position="9bottom">
             <svg><use xlink:href="#iconFilter"></use></svg>
         </span>
         <span class="fn__space"></span>
-        <button id="replaceBtn" class="b3-button b3-button--small b3-button--outline fn__flex-center">↵ ${window.siyuan.languages.replace}</button>
-        <div class="fn__space"></div>
         <button id="replaceAllBtn" class="b3-button b3-button--small b3-button--outline fn__flex-center">${window.siyuan.languages.replaceAll}</button>
+        <div class="fn__space"></div>
+        <button id="replaceBtn" class="b3-button b3-button--small b3-button--outline fn__flex-center">↵ ${window.siyuan.languages.replace}</button>
         <div class="fn__space"></div>
     </div>
     <div id="criteria" class="search__header"></div>
@@ -861,7 +861,9 @@ export const genSearch = (app: App, config: ISearchOption, element: Element, clo
             } else if (target.classList.contains("b3-list-item")) {
                 const searchAssetInputElement = element.querySelector("#searchAssetInput") as HTMLInputElement;
                 if (type === "search-new") {
-                    newFileByName(app, searchInputElement.value);
+                    if (config.method == 0) {
+                        newFileByName(app, searchInputElement.value);
+                    }
                 } else if (type === "search-item") {
                     const isAsset = target.dataset.id;
                     let isClick = event.detail === 1;
@@ -1014,7 +1016,7 @@ export const getQueryTip = (method: number) => {
 
 const updateConfig = (element: Element, item: ISearchOption, config: ISearchOption, edit: Protyle) => {
     const dialogElement = hasClosestByClassName(element, "b3-dialog--open");
-    if (dialogElement && dialogElement.getAttribute("data-key") === window.siyuan.config.keymap.general.search.custom) {
+    if (dialogElement && dialogElement.getAttribute("data-key") === Constants.DIALOG_SEARCH) {
         // https://github.com/siyuan-note/siyuan/issues/6828
         item.hPath = config.hPath;
         item.idPath = config.idPath.join(",").split(",");
@@ -1349,8 +1351,8 @@ ${getAttr(item)}
         edit.protyle.element.classList.add("fn__none");
         element.querySelector(".search__drag").classList.add("fn__none");
     }
-    element.querySelector("#searchList").innerHTML = resultHTML ||
-        `<div class="b3-list-item b3-list-item--focus" data-type="search-new">
+    element.querySelector("#searchList").innerHTML = resultHTML || (
+        config.method === 0 ? `<div class="b3-list-item b3-list-item--focus" data-type="search-new">
     <svg class="b3-list-item__graphic"><use xlink:href="#iconFile"></use></svg>
     <span class="b3-list-item__text">
         ${window.siyuan.languages.newFile} <mark>${(element.querySelector("#searchInput") as HTMLInputElement).value}</mark>
@@ -1359,5 +1361,9 @@ ${getAttr(item)}
 </div>
 <div class="search__empty">
     ${window.siyuan.languages.enterNewTip}
-</div>`;
+</div>` : `<div class="b3-list-item b3-list-item--focus" data-type="search-new">
+    <span class="b3-list-item__text">
+        ${window.siyuan.languages.emptyContent}
+    </span>
+</div>`);
 };

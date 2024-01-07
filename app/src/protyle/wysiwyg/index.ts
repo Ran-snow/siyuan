@@ -379,7 +379,6 @@ export class WYSIWYG {
             }
             const target = event.target as HTMLElement;
             if (hasClosestByClassName(target, "protyle-action") ||
-                hasClosestByClassName(target, "av__gutters") ||
                 hasClosestByClassName(target, "av__cellheader")) {
                 return;
             }
@@ -1511,22 +1510,7 @@ export class WYSIWYG {
                 if (embedElement) {
                     protyle.gutter.render(protyle, embedElement, this.element);
                 } else {
-                    // database 行块标
-                    const rowElement = hasClosestByClassName(event.target, "av__row");
-                    if (rowElement && rowElement.dataset.id) {
-                        const guttersElement = rowElement.querySelector(".av__gutters");
-                        if (guttersElement) {
-                            guttersElement.classList.remove("av__gutters--min");
-                            let guttersLeft = rowElement.parentElement.parentElement.getBoundingClientRect().left - guttersElement.clientWidth;
-                            const contentLeft = protyle.contentElement.getBoundingClientRect().left;
-                            if (guttersLeft < contentLeft) {
-                                guttersLeft = contentLeft;
-                                guttersElement.classList.add("av__gutters--min");
-                            }
-                            guttersElement.setAttribute("style", `left:${guttersLeft}px;top:${rowElement.getBoundingClientRect().top}px`);
-                        }
-                    }
-                    protyle.gutter.render(protyle, nodeElement, this.element);
+                    protyle.gutter.render(protyle, nodeElement, this.element, event.target);
                 }
             }
         });
@@ -1541,6 +1525,11 @@ export class WYSIWYG {
             // https://github.com/siyuan-note/siyuan/issues/4600
             if (event.target.tagName === "PROTYLE-HTML") {
                 event.stopPropagation();
+                return;
+            }
+            if (!hasClosestByAttribute(event.target, "contenteditable", "true")) {
+                event.stopPropagation();
+                event.preventDefault();
                 return;
             }
             const blockElement = hasClosestBlock(event.target);
@@ -1863,7 +1852,7 @@ export class WYSIWYG {
             if (aElement && !event.altKey) {
                 event.stopPropagation();
                 event.preventDefault();
-                const linkAddress = Lute.UnEscapeHTMLStr(aLink);
+                let linkAddress = Lute.UnEscapeHTMLStr(aLink);
                 /// #if MOBILE
                 openByMobile(linkAddress);
                 /// #else
@@ -1893,6 +1882,10 @@ export class WYSIWYG {
                     }
                 } else if (linkAddress) {
                     /// #if !BROWSER
+                    if (0 > linkAddress.indexOf("://")) {
+                        // Support click to open hyperlinks like `www.foo.com` https://github.com/siyuan-note/siyuan/issues/9986
+                        linkAddress = `https://${linkAddress}`;
+                    }
                     shell.openExternal(linkAddress).catch((e) => {
                         showMessage(e);
                     });

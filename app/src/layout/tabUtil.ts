@@ -6,7 +6,6 @@ import {pdfResize} from "../asset/renderAssets";
 import {App} from "../index";
 import {Model} from "./Model";
 import {Editor} from "../editor";
-import {saveScroll} from "../protyle/scroll/saveScroll";
 import {Asset} from "../asset";
 import {Graph} from "./dock/Graph";
 import {Files} from "./dock/Files";
@@ -23,6 +22,7 @@ import {openRecentDocs} from "../business/openRecentDocs";
 import {openHistory} from "../history/history";
 import {newFile} from "../util/newFile";
 import {mountHelp, newNotebook} from "../util/mount";
+import {Constants} from "../constants";
 
 export const getActiveTab = (wndActive = true) => {
     const activeTabElement = document.querySelector(".layout__wnd--active .item--focus");
@@ -185,7 +185,7 @@ export const newCenterEmptyTab = (app: App) => {
                     if (target.id === "editorEmptySearch") {
                         openSearch({
                             app,
-                            hotkey: window.siyuan.config.keymap.general.globalSearch.custom,
+                            hotkey: Constants.DIALOG_GLOBALSEARCH,
                         });
                         event.stopPropagation();
                         event.preventDefault();
@@ -234,7 +234,6 @@ export const copyTab = (app: App, tab: Tab) => {
         callback(newTab: Tab) {
             let model: Model;
             if (tab.model instanceof Editor) {
-                saveScroll(tab.model.editor.protyle);
                 model = new Editor({
                     app,
                     tab: newTab,

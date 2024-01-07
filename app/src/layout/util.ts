@@ -33,6 +33,7 @@ import {App} from "../index";
 import {afterLoadPlugin} from "../plugin/loader";
 import {setTitle} from "../dialog/processSystem";
 import {newCenterEmptyTab, resizeTabs} from "./tabUtil";
+import {setStorageVal} from "../protyle/util/compatibility";
 
 export const setPanelFocus = (element: Element) => {
     if (element.getAttribute("data-type") === "wnd") {
@@ -169,6 +170,10 @@ const dockToJSON = (dock: Dock) => {
 
 export const resetLayout = () => {
     fetchPost("/api/system/setUILayout", {layout: {}}, () => {
+        window.siyuan.storage[Constants.LOCAL_FILEPOSITION] = {};
+        setStorageVal(Constants.LOCAL_FILEPOSITION, window.siyuan.storage[Constants.LOCAL_FILEPOSITION]);
+        window.siyuan.storage[Constants.LOCAL_DIALOGPOSITION] = {};
+        setStorageVal(Constants.LOCAL_DIALOGPOSITION, window.siyuan.storage[Constants.LOCAL_DIALOGPOSITION]);
         window.location.reload();
     });
 };
@@ -200,7 +205,7 @@ export const saveLayout = () => {
         saveCount++;
         setTimeout(() => {
             saveLayout();
-        }, Constants.TIMEOUT_LOAD);
+        }, Constants.TIMEOUT_LOAD * saveCount);
     } else {
         saveCount = 0;
         if (isWindow()) {
@@ -215,25 +220,19 @@ export const saveLayout = () => {
 };
 
 export const exportLayout = (options: {
-    reload: boolean,
-    cb?: () => void,
-    onlyData: boolean,
-    errorExit: boolean,
+    cb: () => void,
+    errorExit: boolean
 }) => {
     if (isWindow()) {
         const layoutJSON: any = {
             layout: {},
         };
         layoutToJSON(window.siyuan.layout.layout, layoutJSON.layout);
-        if (options.onlyData) {
-            return layoutJSON;
-        }
+        getAllModels().editor.forEach(item => {
+            saveScroll(item.editor.protyle);
+        });
         sessionStorage.setItem("layout", JSON.stringify(layoutJSON));
-        if (options.reload) {
-            window.location.reload();
-        } else if (options.cb) {
-            options.cb();
-        }
+        options.cb();
         return;
     }
     const useElement = document.querySelector("#barDock use");
@@ -248,19 +247,27 @@ export const exportLayout = (options: {
         right: dockToJSON(window.siyuan.layout.rightDock),
     };
     layoutToJSON(window.siyuan.layout.layout, layoutJSON.layout);
-    if (options.onlyData) {
-        return layoutJSON;
-    }
+    getAllModels().editor.forEach(item => {
+        saveScroll(item.editor.protyle);
+    });
     fetchPost("/api/system/setUILayout", {
         layout: layoutJSON,
         errorExit: options.errorExit    // 后台不接受该参数，用于请求发生错误时退出程序
     }, () => {
-        if (options.reload) {
-            window.location.reload();
-        } else if (options.cb) {
-            options.cb();
-        }
+        options.cb();
     });
+};
+
+export const getAllLayout = () => {
+    const layoutJSON: any = {
+        hideDock: document.querySelector("#barDock use").getAttribute("xlink:href") === "#iconDock",
+        layout: {},
+        bottom: dockToJSON(window.siyuan.layout.bottomDock),
+        left: dockToJSON(window.siyuan.layout.leftDock),
+        right: dockToJSON(window.siyuan.layout.rightDock),
+    };
+    layoutToJSON(window.siyuan.layout.layout, layoutJSON.layout);
+    return layoutJSON;
 };
 
 const initInternalDock = (dockItem: IDockTab[]) => {
@@ -474,7 +481,7 @@ export const JSONToLayout = (app: App, isStart: boolean) => {
         document.querySelectorAll('li[data-type="tab-header"][data-init-active="true"]').forEach((item: HTMLElement) => {
             item.removeAttribute("data-init-active");
             const tab = getInstanceById(item.getAttribute("data-id")) as Tab;
-            tab.parent.switchTab(item, false, false);
+            tab.parent.switchTab(item, false, false, true, false);
         });
     }
     resizeTopBar();
@@ -532,7 +539,6 @@ export const layoutToJSON = (layout: Layout | Wnd | Tab | Model, json: any, brea
         json.mode = layout.editor.protyle.preview.element.classList.contains("fn__none") ? "wysiwyg" : "preview";
         json.action = layout.editor.protyle.block.showAll ? Constants.CB_GET_ALL : Constants.CB_GET_SCROLL;
         json.instance = "Editor";
-        saveScroll(layout.editor.protyle);
     } else if (layout instanceof Asset) {
         json.path = layout.path;
         if (layout.pdfObject) {
