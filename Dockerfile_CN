@@ -59,14 +59,12 @@ ENTRYPOINT ["/opt/siyuan/kernel"]
 #   --name siyuan_001 \
 #   --restart=always \
 #   -d \
+#   -v /workspace:/siyuan/workspace \
 #   -p 80:6806 \
-#   -v /home/siyuan:/opt/siyuan/workspace/ \
-#   ghcr.io/ran-snow/siyuan:2.10.13 \
-#   --workspace=/opt/siyuan/workspace/ \
-  
-# docker run \
-#   --name siyuan_001 \
-#   --restart=always \
-#   -d \
-#   -p 80:6806 \
-#   ghcr.io/ran-snow/siyuan
+#   ghcr.io/ran-snow/siyuan:2.12.2 \
+#   --workspace=/siyuan/workspace
+
+# mkdir /workspace
+# chmod 777 -R /workspace
+# docker rm -f siyuan_001
+# docker logs siyuan_001
