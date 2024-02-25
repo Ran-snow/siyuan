@@ -64,7 +64,10 @@ ENTRYPOINT ["/opt/siyuan/kernel"]
 #   ghcr.io/ran-snow/siyuan:2.12.2 \
 #   --workspace=/siyuan/workspace
 
+# addgroup --gid 1000 siyuan
+# adduser --uid 1000 --ingroup siyuan --disabled-password siyuan
 # mkdir /workspace
 # chmod 777 -R /workspace
+# chown -R siyuan:siyuan /workspace
 # docker rm -f siyuan_001
 # docker logs siyuan_001
