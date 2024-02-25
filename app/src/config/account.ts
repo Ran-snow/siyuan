@@ -30,7 +30,7 @@ export const account = {
     element: undefined as Element,
     genHTML: (onlyPayHTML = false) => {
         const payHTML = `<a class="b3-button b3-button--big" href="${getIndexURL("pricing.html")}" target="_blank">
-    <svg><use xlink:href="#iconVIP"></use></svg>${window.siyuan.languages[window.siyuan.user.userSiYuanOneTimePayStatus === 1 ? "account4" : "account1"]}
+    <svg><use xlink:href="#iconVIP"></use></svg>${window.siyuan.languages[window.siyuan.user?.userSiYuanOneTimePayStatus === 1 ? "account4" : "account1"]}
 </a>
 <div class="fn__hr--b"></div>
 <span class="b3-chip b3-chip--primary b3-chip--hover${(window.siyuan.user && window.siyuan.user.userSiYuanSubscriptionStatus === 2) ? " fn__none" : ""}" id="trialSub">
@@ -132,11 +132,11 @@ ${renewHTML}
             </button>
             <span class="fn__flex-1"></span>
             <button class="b3-button b3-button--cancel b3-tooltips b3-tooltips__n" id="refresh" aria-label="${window.siyuan.languages.refresh}">
-                <svg><use xlink:href="#iconRefresh"></use></svg>
+                <svg style="margin-right: 0"><use xlink:href="#iconRefresh"></use></svg>
             </button>
         </div>
         <div class="fn__hr--b"></div>
-        <div class="fn__flex">
+        <div class="fn__flex">  
             <label>
                 ${window.siyuan.languages.accountDisplayTitle}
                 <input class="b3-switch fn__flex-center" id="displayTitle" type="checkbox"${window.siyuan.config.account.displayTitle ? " checked" : ""}/>
