@@ -61,11 +61,13 @@ ENTRYPOINT ["/opt/siyuan/kernel"]
 #   -d \
 #   -v /workspace:/siyuan/workspace \
 #   -p 80:6806 \
-#   ghcr.io/ran-snow/siyuan:2.12.2 \
+#   ghcr.io/ran-snow/siyuan:2.12.4 \
 #   --workspace=/siyuan/workspace
 
 # addgroup --gid 1000 siyuan
 # adduser --uid 1000 --ingroup siyuan --disabled-password siyuan
+# ubuntu
+# useradd -s /usr/sbin/nologin -M siyuan -g siyuan --uid 1000
 # mkdir /workspace
 # chmod 777 -R /workspace
 # chown -R siyuan:siyuan /workspace
