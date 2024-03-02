@@ -9,35 +9,37 @@ import {confirmDialog} from "../dialog/confirmDialog";
 
 const renderProvider = (provider: number) => {
     if (provider === 0) {
-        if (needSubscribe("")) {
-            return `<div class="b3-label b3-label--inner">${window.siyuan.config.system.container === "ios" ? window.siyuan.languages._kernel[122] : window.siyuan.languages._kernel[29].replace("${url}", getCloudURL("subscribe/siyuan"))}</div>
-<div class="b3-label b3-label--inner">
-    ${window.siyuan.languages.cloudIntro1}
-    <div class="b3-label__text">
-        <ul class="fn__list">
-            <li>${window.siyuan.languages.cloudIntro2}</li>
-            <li>${window.siyuan.languages.cloudIntro3}</li>
-            <li>${window.siyuan.languages.cloudIntro4}</li>
-            <li>${window.siyuan.languages.cloudIntro5}</li>
-            <li>${window.siyuan.languages.cloudIntro6}</li>
-            <li>${window.siyuan.languages.cloudIntro7}</li>
-            <li>${window.siyuan.languages.cloudIntro8}</li>
-        </ul>
-    </div>
-</div>
-<div class="b3-label b3-label--inner">
-    ${window.siyuan.languages.cloudIntro9}
-    <div class="b3-label__text">
-        <ul style="padding-left: 2em">
-            <li>${window.siyuan.languages.cloudIntro10}</li>
-            <li>${window.siyuan.languages.cloudIntro11}</li>
-        </ul>
-    </div>
-</div>`;
-        }
-        return `<div class="b3-label b3-label--inner">
-    ${window.siyuan.languages.syncOfficialProviderIntro}
-</div>`;
+        provider = 2;
+        window.siyuan.config.sync.provider = 2;
+//         if (needSubscribe("")) {
+//             return `<div class="b3-label b3-label--inner">${window.siyuan.config.system.container === "ios" ? window.siyuan.languages._kernel[122] : window.siyuan.languages._kernel[29].replace("${url}", getCloudURL("subscribe/siyuan"))}</div>
+// <div class="b3-label b3-label--inner">
+//     ${window.siyuan.languages.cloudIntro1}
+//     <div class="b3-label__text">
+//         <ul class="fn__list">
+//             <li>${window.siyuan.languages.cloudIntro2}</li>
+//             <li>${window.siyuan.languages.cloudIntro3}</li>
+//             <li>${window.siyuan.languages.cloudIntro4}</li>
+//             <li>${window.siyuan.languages.cloudIntro5}</li>
+//             <li>${window.siyuan.languages.cloudIntro6}</li>
+//             <li>${window.siyuan.languages.cloudIntro7}</li>
+//             <li>${window.siyuan.languages.cloudIntro8}</li>
+//         </ul>
+//     </div>
+// </div>
+// <div class="b3-label b3-label--inner">
+//     ${window.siyuan.languages.cloudIntro9}
+//     <div class="b3-label__text">
+//         <ul style="padding-left: 2em">
+//             <li>${window.siyuan.languages.cloudIntro10}</li>
+//             <li>${window.siyuan.languages.cloudIntro11}</li>
+//         </ul>
+//     </div>
+// </div>`;
+//         }
+//         return `<div class="b3-label b3-label--inner">
+//     ${window.siyuan.languages.syncOfficialProviderIntro}
+// </div>`;
     }
     if (!isPaidUser()) {
         return `<div class="b3-label b3-label--inner">${window.siyuan.languages["_kernel"][214]}</div>`;
