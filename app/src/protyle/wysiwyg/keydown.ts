@@ -45,11 +45,10 @@ import {
     alignImgLeft,
     commonHotkey,
     downSelect,
-    duplicateBlock,
     getStartEndElement,
     upSelect
 } from "./commonHotkey";
-import {enterBack, fileAnnotationRefMenu, linkMenu, refMenu, setFold, tagMenu, zoomOut} from "../../menus/protyle";
+import {fileAnnotationRefMenu, linkMenu, refMenu, setFold, tagMenu} from "../../menus/protyle";
 import {openAttr} from "../../menus/commonMenuItem";
 import {Constants} from "../../constants";
 import {fetchPost} from "../../util/fetch";
@@ -67,6 +66,7 @@ import {avKeydown} from "../render/av/keydown";
 import {checkFold} from "../../util/noRelyPCFunction";
 import {AIActions} from "../../ai/actions";
 import {openLink} from "../../editor/openLink";
+import {onlyProtyleCommand} from "../../boot/globalEvent/command/protyle";
 
 export const getContentByInlineHTML = (range: Range, cb: (content: string) => void) => {
     let html = "";
@@ -468,19 +468,22 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
         }
 
         if (matchHotKey(window.siyuan.config.keymap.general.enter.custom, event)) {
-            let topNodeElement = getTopAloneElement(nodeElement);
-            if (topNodeElement.parentElement.classList.contains("li") && topNodeElement.parentElement.parentElement.classList.contains("list") &&
-                topNodeElement.nextElementSibling?.classList.contains("list") && topNodeElement.previousElementSibling.classList.contains("protyle-action")) {
-                topNodeElement = topNodeElement.parentElement;
-            }
-            zoomOut({protyle, id: topNodeElement.getAttribute("data-node-id")});
+            onlyProtyleCommand({
+                protyle,
+                command: "enter",
+                previousRange: range,
+            });
             event.preventDefault();
             event.stopPropagation();
             return;
         }
 
         if (matchHotKey(window.siyuan.config.keymap.general.enterBack.custom, event)) {
-            enterBack(protyle, nodeElement.getAttribute("data-node-id"));
+            onlyProtyleCommand({
+                protyle,
+                command: "enterBack",
+                previousRange: range,
+            });
             event.preventDefault();
             event.stopPropagation();
             return;
@@ -1238,7 +1241,8 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
             const id = nodeElement.getAttribute("data-node-id");
             const html = nodeElement.outerHTML;
             const editElement = getContenteditableElement(nodeElement);
-            editElement.innerHTML = "```" + window.siyuan.storage[Constants.LOCAL_CODELANG] + "\n" + editElement.textContent + "<wbr>\n```";
+            // 需要 EscapeHTMLStr https://github.com/siyuan-note/siyuan/issues/11451
+            editElement.innerHTML = "```" + window.siyuan.storage[Constants.LOCAL_CODELANG] + "\n" + Lute.EscapeHTMLStr(editElement.textContent) + "<wbr>\n```";
             const newHTML = protyle.lute.SpinBlockDOM(nodeElement.outerHTML);
             nodeElement.outerHTML = newHTML;
             const newNodeElement = protyle.wysiwyg.element.querySelector(`[data-node-id="${id}"]`);
@@ -1432,17 +1436,6 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                 type: "BlocksMergeSuperBlock",
                 level: "col"
             });
-            return;
-        }
-
-        if (!event.repeat && matchHotKey(window.siyuan.config.keymap.editor.general.duplicate.custom, event)) {
-            event.preventDefault();
-            event.stopPropagation();
-            let selectsElement: HTMLElement[] = Array.from(protyle.wysiwyg.element.querySelectorAll(".protyle-wysiwyg--select"));
-            if (selectsElement.length === 0) {
-                selectsElement = [nodeElement];
-            }
-            duplicateBlock(selectsElement, protyle);
             return;
         }
 

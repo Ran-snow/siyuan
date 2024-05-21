@@ -23,6 +23,7 @@ type TOperation =
     | "updateAttrViewColTemplate"
     | "sortAttrViewRow"
     | "sortAttrViewCol"
+    | "sortAttrViewKey"
     | "setAttrViewColPin"
     | "setAttrViewColHidden"
     | "setAttrViewColWrap"
@@ -543,10 +544,7 @@ interface IPluginData {
 
 interface IPluginDockTab {
     position: TPluginDockPosition,
-    size: {
-        width: number,
-        height: number
-    },
+    size: Config.IUILayoutDockPanelSize,
     icon: string,
     hotkey?: string,
     title: string,
@@ -834,7 +832,7 @@ interface IAVColumn {
         name: string,
         color: string,
     }[],
-    relation?: IAVCellRelationValue,
+    relation?: IAVColumnRelation,
     rollup?: IAVCellRollupValue
 }
 
@@ -886,16 +884,18 @@ interface IAVCellValue {
     checkbox?: {
         checked: boolean
     }
-    relation?: {
-        blockIDs: string[]
-        contents?: IAVCellValue[]
-    }
+    relation?: IAVCellRelationValue
     rollup?: {
         contents?: IAVCellValue[]
     }
     date?: IAVCellDateValue
     created?: IAVCellDateValue
     updated?: IAVCellDateValue
+}
+
+interface IAVCellRelationValue {
+    blockIDs: string[]
+    contents?: IAVCellValue[]
 }
 
 interface IAVCellDateValue {
@@ -919,7 +919,7 @@ interface IAVCellAssetValue {
     type: "file" | "image"
 }
 
-interface IAVCellRelationValue {
+interface IAVColumnRelation {
     avID?: string
     backKeyID?: string
     isTwoWay?: boolean

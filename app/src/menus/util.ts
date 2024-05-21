@@ -9,15 +9,17 @@ import {Constants} from "../constants";
 import {openNewWindowById} from "../window/openNewWindow";
 import {MenuItem} from "./Menu";
 import {App} from "../index";
-import {isInAndroid, updateHotkeyTip} from "../protyle/util/compatibility";
+import {isInAndroid, openByMobile, updateHotkeyTip} from "../protyle/util/compatibility";
 import {checkFold} from "../util/noRelyPCFunction";
 
 export const exportAsset = (src: string) => {
-    /// #if !BROWSER
     return {
         label: window.siyuan.languages.export,
         icon: "iconUpload",
         async click() {
+            /// #if BROWSER
+            openByMobile(src);
+            /// #else
             const result = await ipcRenderer.invoke(Constants.SIYUAN_GET, {
                 cmd: "showSaveDialog",
                 defaultPath: getAssetName(src) + pathPosix().extname(src),
@@ -26,18 +28,17 @@ export const exportAsset = (src: string) => {
             if (!result.canceled) {
                 fetchPost("/api/file/copyFile", {src, dest: result.filePath});
             }
+            /// #endif
         }
     };
-    /// #endif
 };
-
 
 export const openEditorTab = (app: App, ids: string[], notebookId?: string, pathString?: string) => {
     /// #if !MOBILE
     const openSubmenus: IMenu[] = [{
         icon: "iconLayoutRight",
         label: window.siyuan.languages.insertRight,
-        accelerator: ids.length === 1 ? `${updateHotkeyTip(window.siyuan.config.keymap.editor.general.insertRight.custom)}/${updateHotkeyTip("⌥Click")}` : undefined,
+        accelerator: ids.length === 1 ? `${updateHotkeyTip(window.siyuan.config.keymap.editor.general.insertRight.custom)}/${updateHotkeyTip("⌥" + window.siyuan.languages.click)}` : undefined,
         click: () => {
             if (notebookId) {
                 openFileById({
@@ -63,7 +64,7 @@ export const openEditorTab = (app: App, ids: string[], notebookId?: string, path
     }, {
         icon: "iconLayoutBottom",
         label: window.siyuan.languages.insertBottom,
-        accelerator: ids.length === 1 ? "⇧Click" : "",
+        accelerator: ids.length === 1 ? "⇧" + window.siyuan.languages.click : "",
         click: () => {
             if (notebookId) {
                 openFileById({
@@ -90,7 +91,7 @@ export const openEditorTab = (app: App, ids: string[], notebookId?: string, path
     if (window.siyuan.config.fileTree.openFilesUseCurrentTab) {
         openSubmenus.push({
             label: window.siyuan.languages.openInNewTab,
-            accelerator: ids.length === 1 ? "⌥⌘Click" : undefined,
+            accelerator: ids.length === 1 ? "⌥⌘" + window.siyuan.languages.click : undefined,
             click: () => {
                 if (notebookId) {
                     openFileById({
@@ -162,9 +163,9 @@ export const openEditorTab = (app: App, ids: string[], notebookId?: string, path
     /// #endif
 };
 
-export const copyPNG = (imgElement: HTMLImageElement) => {
+export const copyPNGByLink = (link:string) => {
     if (isInAndroid()) {
-        window.JSAndroid.writeImageClipboard(imgElement.getAttribute("src"));
+        window.JSAndroid.writeImageClipboard(link);
         return;
     } else {
         const canvas = document.createElement("canvas");
@@ -182,6 +183,7 @@ export const copyPNG = (imgElement: HTMLImageElement) => {
                 ]);
             }, "image/png", 1);
         };
-        tempElement.src = imgElement.getAttribute("src");
+        tempElement.src = link;
     }
 };
+

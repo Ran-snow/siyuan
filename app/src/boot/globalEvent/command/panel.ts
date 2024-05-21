@@ -1,30 +1,31 @@
-import {Dialog} from "../../dialog";
-import {App} from "../../index";
-import {upDownHint} from "../../util/upDownHint";
-import {updateHotkeyTip} from "../../protyle/util/compatibility";
-import {isMobile} from "../../util/functions";
-import {Constants} from "../../constants";
-import {Editor} from "../../editor";
+import {Dialog} from "../../../dialog";
+import {App} from "../../../index";
+import {upDownHint} from "../../../util/upDownHint";
+import {updateHotkeyTip} from "../../../protyle/util/compatibility";
+import {isMobile} from "../../../util/functions";
+import {Constants} from "../../../constants";
+import {Editor} from "../../../editor";
 /// #if MOBILE
-import {getCurrentEditor} from "../../mobile/editor";
-import {openDock} from "../../mobile/dock/util";
-import {popMenu} from "../../mobile/menu";
+import {getCurrentEditor} from "../../../mobile/editor";
+import {popSearch} from "../../../mobile/menu/search";
 /// #else
-import {closeTabByType, getActiveTab, getDockByType} from "../../layout/tabUtil";
-import {Custom} from "../../layout/dock/Custom";
-import {getAllModels} from "../../layout/getAll";
-import {Files} from "../../layout/dock/Files";
-import {Search} from "../../search";
-import {openSetting} from "../../config";
-import {Tab} from "../../layout/Tab";
+import {getActiveTab, getDockByType} from "../../../layout/tabUtil";
+import {Custom} from "../../../layout/dock/Custom";
+import {getAllModels} from "../../../layout/getAll";
+import {Files} from "../../../layout/dock/Files";
+import {Search} from "../../../search";
+import {openSearch} from "../../../search/spread";
 /// #endif
-import {openHistory} from "../../history/history";
-import {addEditorToDatabase, addFilesToDatabase} from "../../protyle/render/av/addToDatabase";
-import {hasClosestByClassName} from "../../protyle/util/hasClosest";
-import {newDailyNote} from "../../util/mount";
+import {addEditorToDatabase, addFilesToDatabase} from "../../../protyle/render/av/addToDatabase";
+import {hasClosestBlock, hasClosestByClassName, hasTopClosestByTag} from "../../../protyle/util/hasClosest";
+import {onlyProtyleCommand} from "./protyle";
+import {globalCommand} from "./global";
+import {getDisplayName, getNotebookName, getTopPaths, movePathTo, moveToPath, pathPosix} from "../../../util/pathName";
+import {hintMoveBlock} from "../../../protyle/hint/extend";
+import {fetchSyncPost} from "../../../util/fetch";
 
 export const commandPanel = (app: App) => {
-    const range = getSelection().getRangeAt(0);
+    const range = getSelection().rangeCount > 0 ? getSelection().getRangeAt(0) : undefined;
     const dialog = new Dialog({
         width: isMobile() ? "92vw" : "80vw",
         height: isMobile() ? "80vh" : "70vh",
@@ -37,7 +38,7 @@ export const commandPanel = (app: App) => {
     <ul class="b3-list b3-list--background search__list" id="commands"></ul>
     <div class="search__tip">
         <kbd>↑/↓</kbd> ${window.siyuan.languages.searchTip1}
-        <kbd>Enter/Click</kbd> ${window.siyuan.languages.confirm}
+        <kbd>${window.siyuan.languages.enterKey}/${window.siyuan.languages.click}</kbd> ${window.siyuan.languages.confirm}
         <kbd>Esc</kbd> ${window.siyuan.languages.close}
     </div>
 </div>`
@@ -48,12 +49,20 @@ export const commandPanel = (app: App) => {
     Object.keys(window.siyuan.config.keymap.general).forEach((key) => {
         let keys;
         /// #if MOBILE
-        keys = ["addToDatabase", "fileTree", "outline", "bookmark", "tag", "dailyNote", "inbox", "backlinks", "config",
-            "dataHistory"];
+        keys = ["addToDatabase", "fileTree", "outline", "bookmark", "tag", "dailyNote", "inbox", "backlinks",
+            "dataHistory", "editReadonly", "enter", "enterBack", "globalSearch", "lockScreen", "mainMenu", "move",
+            "newFile", "recentDocs", "replace", "riffCard", "search", "selectOpen1", "syncNow"];
         /// #else
         keys = ["addToDatabase", "fileTree", "outline", "bookmark", "tag", "dailyNote", "inbox", "backlinks",
             "graphView", "globalGraph", "closeAll", "closeLeft", "closeOthers", "closeRight", "closeTab",
-            "closeUnmodified", "config", "dataHistory"];
+            "closeUnmodified", "config", "dataHistory", "editReadonly", "enter", "enterBack", "globalSearch", "goBack",
+            "goForward", "goToEditTabNext", "goToEditTabPrev", "goToTab1", "goToTab2", "goToTab3", "goToTab4",
+            "goToTab5", "goToTab6", "goToTab7", "goToTab8", "goToTab9", "goToTabNext", "goToTabPrev", "lockScreen",
+            "mainMenu", "move", "newFile", "recentDocs", "replace", "riffCard", "search", "selectOpen1", "syncNow",
+            "splitLR", "splitMoveB", "splitMoveR", "splitTB", "tabToWindow", "stickSearch", "toggleDock"];
+        /// #if !BROWSER
+        keys.push("toggleWin");
+        /// #endif
         /// #endif
         if (keys.includes(key)) {
             html += `<li class="b3-list-item" data-command="${key}">
@@ -67,6 +76,7 @@ export const commandPanel = (app: App) => {
         plugin.commands.forEach(command => {
             const liElement = document.createElement("li");
             liElement.classList.add("b3-list-item");
+            liElement.dataset.command = command.langKey;
             liElement.innerHTML = `<span class="b3-list-item__text">${plugin.displayName}: ${command.langText || plugin.i18n[command.langKey]}</span>
 <span class="b3-list-item__meta${isMobile() ? " fn__none" : ""}">${updateHotkeyTip(command.customHotkey)}</span>`;
             liElement.addEventListener("click", () => {
@@ -146,7 +156,9 @@ const filterList = (inputElement: HTMLInputElement, listElement: Element) => {
     let hasFocus = false;
     Array.from(listElement.children).forEach((element: HTMLElement) => {
         const elementValue = element.querySelector(".b3-list-item__text").textContent.toLowerCase();
-        if (inputValue.indexOf(elementValue) > -1 || elementValue.indexOf(inputValue) > -1) {
+        const command = element.dataset.command;
+        if (inputValue.indexOf(elementValue) > -1 || elementValue.indexOf(inputValue) > -1 ||
+            inputValue.indexOf(command) > -1 || command.indexOf(inputValue) > -1) {
             if (!hasFocus) {
                 element.classList.add("b3-list-item--focus");
             }
@@ -158,137 +170,15 @@ const filterList = (inputElement: HTMLInputElement, listElement: Element) => {
     });
 };
 
-export const execByCommand = (options: {
+export const execByCommand = async (options: {
     command: string,
     app?: App,
     previousRange?: Range,
     protyle?: IProtyle,
     fileLiElements?: Element[]
 }) => {
-    /// #if MOBILE
-    switch (options.command) {
-        case "fileTree":
-            openDock("file");
-            return;
-        case "outline":
-        case "bookmark":
-        case "tag":
-        case "inbox":
-            openDock(options.command);
-            return;
-        case "backlinks":
-            openDock("backlink");
-            return;
-        case "config":
-            popMenu();
-            return;
-    }
-    /// #else
-    switch (options.command) {
-        case "fileTree":
-            getDockByType("file").toggleModel("file");
-            return;
-        case "outline":
-            getDockByType("outline").toggleModel("outline");
-            return;
-        case "bookmark":
-        case "tag":
-        case "inbox":
-            getDockByType(options.command).toggleModel(options.command);
-            return;
-        case "backlinks":
-            getDockByType("backlink").toggleModel("backlink");
-            return;
-        case "graphView":
-            getDockByType("graph").toggleModel("graph");
-            return;
-        case "globalGraph":
-            getDockByType("globalGraph").toggleModel("globalGraph");
-            return;
-        case "config":
-            openSetting(options.app);
-            return;
-    }
-    if (options.command === "closeUnmodified") {
-        const tab = getActiveTab(false);
-        if (tab) {
-            const unmodifiedTabs: Tab[] = [];
-            tab.parent.children.forEach((item: Tab) => {
-                const editor = item.model as Editor;
-                if (!editor || (editor.editor?.protyle && !editor.editor?.protyle.updated)) {
-                    unmodifiedTabs.push(item);
-                }
-            });
-            if (unmodifiedTabs.length > 0) {
-                closeTabByType(tab, "other", unmodifiedTabs);
-            }
-        }
+    if (globalCommand(options.command, options.app)) {
         return;
-    }
-    if (options.command === "closeTab") {
-        const activeTabElement = document.querySelector(".layout__tab--active");
-        if (activeTabElement && activeTabElement.getBoundingClientRect().width > 0) {
-            let type = "";
-            Array.from(activeTabElement.classList).find(item => {
-                if (item.startsWith("sy__")) {
-                    type = item.replace("sy__", "");
-                    return true;
-                }
-            });
-            if (type) {
-                getDockByType(type)?.toggleModel(type, false, true);
-            }
-            return;
-        }
-        const tab = getActiveTab(false);
-        if (tab) {
-            tab.parent.removeTab(tab.id);
-        }
-        return;
-    }
-    if (options.command === "closeOthers" || options.command === "closeAll") {
-        const tab = getActiveTab(false);
-        if (tab) {
-            closeTabByType(tab, options.command);
-        }
-        return;
-    }
-    if (options.command === "closeLeft" || options.command === "closeRight") {
-        const tab = getActiveTab(false);
-        if (tab) {
-            const leftTabs: Tab[] = [];
-            const rightTabs: Tab[] = [];
-            let midIndex = -1;
-            tab.parent.children.forEach((item: Tab, index: number) => {
-                if (item.id === tab.id) {
-                    midIndex = index;
-                }
-                if (midIndex === -1) {
-                    leftTabs.push(item);
-                } else if (index > midIndex) {
-                    rightTabs.push(item);
-                }
-            });
-            if (options.command === "closeLeft") {
-                if (leftTabs.length > 0) {
-                    closeTabByType(tab, "other", leftTabs);
-                }
-            } else {
-                if (rightTabs.length > 0) {
-                    closeTabByType(tab, "other", rightTabs);
-                }
-            }
-        }
-        return;
-    }
-    /// #endif
-    switch (options.command) {
-        case "dailyNote":
-            newDailyNote(options.app);
-            return;
-        case "dataHistory":
-            openHistory(options.app);
-            return;
     }
 
     const isFileFocus = document.querySelector(".layout__tab--active")?.classList.contains("sy__file");
@@ -300,7 +190,7 @@ export const execByCommand = (options: {
         options.previousRange = protyle.toolbar.range;
     }
     /// #endif
-    const range: Range = options.previousRange || getSelection().getRangeAt(0);
+    const range: Range = options.previousRange || (getSelection().rangeCount > 0 ? getSelection().getRangeAt(0) : document.createRange());
     let fileLiElements = options.fileLiElements;
     if (!isFileFocus && !protyle) {
         if (range) {
@@ -337,9 +227,6 @@ export const execByCommand = (options: {
                         }
                     });
                 }
-            }
-            if (!protyle) {
-                return;
             }
         } else if (!protyle) {
             if (!protyle && range) {
@@ -382,11 +269,18 @@ export const execByCommand = (options: {
                     }
                 });
             }
-            if (!protyle) {
-                return false;
-            }
         }
     }
+
+    // only protyle
+    if (!isFileFocus && protyle && onlyProtyleCommand({
+        command: options.command,
+        previousRange: range,
+        protyle
+    })) {
+        return;
+    }
+
     if (isFileFocus && !fileLiElements) {
         const dockFile = getDockByType("file");
         if (!dockFile) {
@@ -396,12 +290,160 @@ export const execByCommand = (options: {
         fileLiElements = Array.from(files.element.querySelectorAll(".b3-list-item--focus"));
     }
 
+    // 全局命令，在没有 protyle 和文件树没聚焦的情况下执行
+    if ((!protyle && !isFileFocus) ||
+        (isFileFocus && (!fileLiElements || fileLiElements.length === 0)) ||
+        (isMobile() && !document.getElementById("empty").classList.contains("fn__none"))) {
+        if (options.command === "replace") {
+            /// #if MOBILE
+            popSearch(options.app, {hasReplace: true, page: 1});
+            /// #else
+            openSearch({
+                app: options.app,
+                hotkey: Constants.DIALOG_REPLACE,
+                key: range.toString()
+            });
+            /// #endif
+        } else if (options.command === "search") {
+            /// #if MOBILE
+            popSearch(options.app, {hasReplace: false, page: 1});
+            /// #else
+            openSearch({
+                app: options.app,
+                hotkey: Constants.DIALOG_SEARCH,
+                key: range.toString()
+            });
+            /// #endif
+        }
+        return;
+    }
+
+    // protyle and file tree
     switch (options.command) {
+        case "replace":
+            if (!isFileFocus) {
+                /// #if MOBILE
+                const response = await fetchSyncPost("/api/filetree/getHPathByPath", {
+                    notebook: protyle.notebookId,
+                    path: protyle.path.endsWith(".sy") ? protyle.path : protyle.path + ".sy"
+                });
+                popSearch(options.app, {
+                    page: 1,
+                    hasReplace: true,
+                    hPath: pathPosix().join(getNotebookName(protyle.notebookId), response.data),
+                    idPath: [pathPosix().join(protyle.notebookId, protyle.path)]
+                });
+                /// #else
+                openSearch({
+                    app: options.app,
+                    hotkey: Constants.DIALOG_REPLACE,
+                    key: range.toString(),
+                    notebookId: protyle.notebookId,
+                    searchPath: protyle.path
+                });
+                /// #endif
+            } else {
+                /// #if !MOBILE
+                const topULElement = hasTopClosestByTag(fileLiElements[0], "UL");
+                if (!topULElement) {
+                    return false;
+                }
+                const notebookId = topULElement.getAttribute("data-url");
+                const pathString = fileLiElements[0].getAttribute("data-path");
+                const isFile = fileLiElements[0].getAttribute("data-type") === "navigation-file";
+                if (isFile) {
+                    openSearch({
+                        app: options.app,
+                        hotkey: Constants.DIALOG_REPLACE,
+                        notebookId: notebookId,
+                        searchPath: getDisplayName(pathString, false, true)
+                    });
+                } else {
+                    openSearch({
+                        app: options.app,
+                        hotkey: Constants.DIALOG_REPLACE,
+                        notebookId: notebookId,
+                    });
+                }
+                /// #endif
+            }
+            break;
+        case "search":
+            if (!isFileFocus) {
+                /// #if MOBILE
+                const response = await fetchSyncPost("/api/filetree/getHPathByPath", {
+                    notebook: protyle.notebookId,
+                    path: protyle.path.endsWith(".sy") ? protyle.path : protyle.path + ".sy"
+                });
+                popSearch(options.app, {
+                    page: 1,
+                    hasReplace: false,
+                    hPath: pathPosix().join(getNotebookName(protyle.notebookId), response.data),
+                    idPath: [pathPosix().join(protyle.notebookId, protyle.path)]
+                });
+                /// #else
+                openSearch({
+                    app: options.app,
+                    hotkey: Constants.DIALOG_SEARCH,
+                    key: range.toString(),
+                    notebookId: protyle.notebookId,
+                    searchPath: protyle.path
+                });
+                /// #endif
+            } else {
+                /// #if !MOBILE
+                const topULElement = hasTopClosestByTag(fileLiElements[0], "UL");
+                if (!topULElement) {
+                    return false;
+                }
+                const notebookId = topULElement.getAttribute("data-url");
+                const pathString = fileLiElements[0].getAttribute("data-path");
+                const isFile = fileLiElements[0].getAttribute("data-type") === "navigation-file";
+                if (isFile) {
+                    openSearch({
+                        app: options.app,
+                        hotkey: Constants.DIALOG_SEARCH,
+                        notebookId: notebookId,
+                        searchPath: getDisplayName(pathString, false, true)
+                    });
+                } else {
+                    openSearch({
+                        app: options.app,
+                        hotkey: Constants.DIALOG_SEARCH,
+                        notebookId: notebookId,
+                    });
+                }
+                /// #endif
+            }
+            break;
         case "addToDatabase":
             if (!isFileFocus) {
                 addEditorToDatabase(protyle, range);
             } else {
                 addFilesToDatabase(fileLiElements);
+            }
+            break;
+        case "move":
+            if (!isFileFocus) {
+                const nodeElement = hasClosestBlock(range.startContainer);
+                if (protyle.title?.editElement.contains(range.startContainer) || !nodeElement) {
+                    movePathTo((toPath, toNotebook) => {
+                        moveToPath([protyle.path], toNotebook[0], toPath[0]);
+                    }, [protyle.path], range);
+                } else if (nodeElement && range && protyle.element.contains(range.startContainer)) {
+                    let selectElements = Array.from(protyle.wysiwyg.element.querySelectorAll(".protyle-wysiwyg--select"));
+                    if (selectElements.length === 0) {
+                        selectElements = [nodeElement];
+                    }
+                    movePathTo((toPath) => {
+                        hintMoveBlock(toPath[0], selectElements, protyle);
+                    });
+                }
+            } else {
+                const paths = getTopPaths(fileLiElements);
+                movePathTo((toPath, toNotebook) => {
+                    moveToPath(paths, toNotebook[0], toPath[0]);
+                }, paths);
             }
             break;
     }

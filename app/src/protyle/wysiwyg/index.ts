@@ -12,7 +12,7 @@ import {
     focusByWbr,
     focusSideBlock,
     getEditorRange,
-    getSelectionOffset,
+    getSelectionOffset, setFirstNodeRange,
     setLastNodeRange,
 } from "../util/selection";
 import {Constants} from "../../constants";
@@ -91,6 +91,8 @@ import {
 } from "../render/av/cell";
 import {openEmojiPanel, unicode2Emoji} from "../../emoji";
 import {openLink} from "../../editor/openLink";
+import {mathRender} from "../render/mathRender";
+import {editAssetItem} from "../render/av/asset";
 
 export class WYSIWYG {
     public lastHTMLs: { [key: string]: string } = {};
@@ -227,6 +229,10 @@ export class WYSIWYG {
                     item.setCurrent(nodeElement);
                 }
             });
+        }
+        /// #else
+        if (protyle.disabled) {
+            protyle.toolbar.range = getEditorRange(nodeElement);
         }
         /// #endif
     }
@@ -1254,7 +1260,14 @@ export class WYSIWYG {
                         endBlockElement = hasClosestBlock(range.endContainer);
                     }
                     if (startBlockElement && endBlockElement && !endBlockElement.isSameNode(startBlockElement)) {
-                        range.collapse(true);
+                        if ((range.startContainer.nodeType === 1 && (range.startContainer as HTMLElement).tagName === "DIV" && (range.startContainer as HTMLElement).classList.contains("protyle-attr")) ||
+                            event.clientY > mouseUpEvent.clientY) {
+                            setFirstNodeRange(getContenteditableElement(endBlockElement), range);
+                        } else if (range.endOffset === 0 && range.endContainer.nodeType === 1 && (range.endContainer as HTMLElement).tagName === "DIV") {
+                            setLastNodeRange(getContenteditableElement(startBlockElement), range, false);
+                        } else {
+                            range.collapse(true);
+                        }
                     }
                 }
             };
@@ -1436,6 +1449,7 @@ export class WYSIWYG {
                         tempElement.append(range.extractContents());
                         nodeElement.outerHTML = protyle.lute.SpinBlockDOM(nodeElement.outerHTML);
                         nodeElement = protyle.wysiwyg.element.querySelector(`[data-node-id="${id}"]`) as HTMLElement;
+                        mathRender(nodeElement);
                         focusByWbr(nodeElement, range);
                     } else {
                         const inlineMathElement = hasClosestByAttribute(range.commonAncestorContainer, "data-type", "inline-math");
@@ -1532,6 +1546,47 @@ export class WYSIWYG {
                 /// #endif
                 return false;
             }
+
+            const nodeElement = hasClosestBlock(target);
+            if (!nodeElement) {
+                return false;
+            }
+            const avCellElement = hasClosestByClassName(target, "av__cell");
+            if (avCellElement) {
+                if (avCellElement.classList.contains("av__cell--header")) {
+                    if (!protyle.disabled) {
+                        showColMenu(protyle, nodeElement, avCellElement);
+                    }
+                    event.stopPropagation();
+                    event.preventDefault();
+                    return;
+                }
+                if (getTypeByCellElement(avCellElement) === "mAsset") {
+                    const assetImgElement = hasClosestByClassName(target, "av__cellassetimg") || hasClosestByClassName(target, "av__celltext--url");
+                    if (assetImgElement) {
+                        let index = 0;
+                        Array.from(avCellElement.children).find((item, i) => {
+                            if (item === assetImgElement) {
+                                index = i;
+                                return true;
+                            }
+                        });
+                        editAssetItem({
+                            protyle,
+                            cellElements: [avCellElement],
+                            blockElement: hasClosestBlock(assetImgElement) as HTMLElement,
+                            content: target.tagName === "IMG" ? target.getAttribute("src") : target.getAttribute("data-url"),
+                            type: target.tagName === "IMG" ? "image" : "file",
+                            name: target.tagName === "IMG" ? "" : target.getAttribute("data-name"),
+                            index,
+                            rect: target.getBoundingClientRect()
+                        });
+                        event.stopPropagation();
+                        event.preventDefault();
+                        return;
+                    }
+                }
+            }
             // 在 span 前面，防止单元格哪 block-ref 被修改
             const avRowElement = hasClosestByClassName(target, "av__row");
             if (avRowElement && avContextmenu(protyle, avRowElement, {
@@ -1543,6 +1598,26 @@ export class WYSIWYG {
                 event.preventDefault();
                 return;
             }
+
+            const avTabHeaderElement = hasClosestByClassName(target, "item");
+            if (nodeElement.classList.contains("av") && avTabHeaderElement) {
+                if (avTabHeaderElement.classList.contains("item--focus")) {
+                    openViewMenu({protyle, blockElement: nodeElement, element: avTabHeaderElement});
+                } else {
+                    nodeElement.removeAttribute("data-render");
+                    avRender(nodeElement, protyle, () => {
+                        openViewMenu({
+                            protyle,
+                            blockElement: nodeElement,
+                            element: nodeElement.querySelector(".item.item--focus")
+                        });
+                    }, avTabHeaderElement.dataset.id);
+                }
+                event.stopPropagation();
+                event.preventDefault();
+                return;
+            }
+
             protyle.toolbar.range = getEditorRange(protyle.element);
             if (target.tagName === "SPAN") { // https://ld246.com/article/1665141518103
                 let types = protyle.toolbar.getCurrentType(protyle.toolbar.range);
@@ -1589,37 +1664,6 @@ export class WYSIWYG {
                     clientY: y
                 });
                 return false;
-            }
-            const nodeElement = hasClosestBlock(target);
-            if (!nodeElement) {
-                return false;
-            }
-            const avCellHeaderElement = hasClosestByClassName(target, "av__cell--header");
-            if (avCellHeaderElement) {
-                if (!protyle.disabled) {
-                    showColMenu(protyle, nodeElement, avCellHeaderElement);
-                }
-                event.stopPropagation();
-                event.preventDefault();
-                return;
-            }
-            const avTabHeaderElement = hasClosestByClassName(target, "item");
-            if (nodeElement.classList.contains("av") && avTabHeaderElement) {
-                if (avTabHeaderElement.classList.contains("item--focus")) {
-                    openViewMenu({protyle, blockElement: nodeElement, element: avTabHeaderElement});
-                } else {
-                    nodeElement.removeAttribute("data-render");
-                    avRender(nodeElement, protyle, () => {
-                        openViewMenu({
-                            protyle,
-                            blockElement: nodeElement,
-                            element: nodeElement.querySelector(".item.item--focus")
-                        });
-                    }, avTabHeaderElement.dataset.id);
-                }
-                event.stopPropagation();
-                event.preventDefault();
-                return;
             }
             if (!isNotEditBlock(nodeElement) && !nodeElement.classList.contains("protyle-wysiwyg--select") &&
                 !hasClosestByClassName(target, "protyle-action") && // https://github.com/siyuan-note/siyuan/issues/8983
@@ -2127,11 +2171,7 @@ export class WYSIWYG {
                 openGlobalSearch(protyle.app, `#${tagElement.textContent}#`, !ctrlIsPressed);
                 hideElements(["dialog"]);
                 /// #else
-                const searchOption = window.siyuan.storage[Constants.LOCAL_SEARCHDATA];
                 popSearch(protyle.app, {
-                    removed: searchOption.removed,
-                    sort: searchOption.sort,
-                    group: searchOption.group,
                     hasReplace: false,
                     method: 0,
                     hPath: "",
@@ -2139,8 +2179,6 @@ export class WYSIWYG {
                     k: `#${tagElement.textContent}#`,
                     r: "",
                     page: 1,
-                    types: Object.assign({}, searchOption.types),
-                    replaceTypes: Object.assign({}, searchOption.replaceTypes)
                 });
                 /// #endif
                 return;

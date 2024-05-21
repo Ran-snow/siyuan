@@ -43,7 +43,7 @@ import {blockRender} from "../protyle/render/blockRender";
 import {renameAsset} from "../editor/rename";
 import {electronUndo} from "../protyle/undo";
 import {pushBack} from "../mobile/util/MobileBackFoward";
-import {copyPNG, exportAsset} from "./util";
+import {copyPNGByLink, exportAsset} from "./util";
 import {removeInlineType} from "../protyle/toolbar/util";
 import {alignImgCenter, alignImgLeft} from "../protyle/wysiwyg/commonHotkey";
 import {checkFold, renameTag} from "../util/noRelyPCFunction";
@@ -363,7 +363,7 @@ export const refMenu = (protyle: IProtyle, element: HTMLElement) => {
     window.siyuan.menus.menu.append(new MenuItem({
         label: window.siyuan.languages.openBy,
         icon: "iconOpen",
-        accelerator: window.siyuan.config.keymap.editor.general.openBy.custom + "/Click",
+        accelerator: window.siyuan.config.keymap.editor.general.openBy.custom + "/" + window.siyuan.languages.click,
         click() {
             checkFold(refBlockId, (zoomIn, action) => {
                 openFileById({
@@ -378,7 +378,7 @@ export const refMenu = (protyle: IProtyle, element: HTMLElement) => {
     window.siyuan.menus.menu.append(new MenuItem({
         label: window.siyuan.languages.refTab,
         icon: "iconEyeoff",
-        accelerator: window.siyuan.config.keymap.editor.general.refTab.custom + "/⌘Click",
+        accelerator: window.siyuan.config.keymap.editor.general.refTab.custom + "/⌘" + window.siyuan.languages.click,
         click() {
             checkFold(refBlockId, (zoomIn) => {
                 openFileById({
@@ -394,7 +394,7 @@ export const refMenu = (protyle: IProtyle, element: HTMLElement) => {
     window.siyuan.menus.menu.append(new MenuItem({
         label: window.siyuan.languages.insertRight,
         icon: "iconLayoutRight",
-        accelerator: window.siyuan.config.keymap.editor.general.insertRight.custom + "/⌥Click",
+        accelerator: window.siyuan.config.keymap.editor.general.insertRight.custom + "/⌥" + window.siyuan.languages.click,
         click() {
             checkFold(refBlockId, (zoomIn, action) => {
                 openFileById({
@@ -410,7 +410,7 @@ export const refMenu = (protyle: IProtyle, element: HTMLElement) => {
     window.siyuan.menus.menu.append(new MenuItem({
         label: window.siyuan.languages.insertBottom,
         icon: "iconLayoutBottom",
-        accelerator: window.siyuan.config.keymap.editor.general.insertBottom.custom + (window.siyuan.config.keymap.editor.general.insertBottom.custom ? "/" : "") + "⇧Click",
+        accelerator: window.siyuan.config.keymap.editor.general.insertBottom.custom + (window.siyuan.config.keymap.editor.general.insertBottom.custom ? "/" : "") + "⇧" + window.siyuan.languages.click,
         click() {
             checkFold(refBlockId, (zoomIn, action) => {
                 openFileById({
@@ -957,7 +957,7 @@ export const imgMenu = (protyle: IProtyle, range: Range, assetElement: HTMLEleme
         accelerator: window.siyuan.config.keymap.editor.general.copyBlockRef.custom,
         icon: "iconImage",
         click() {
-            copyPNG(imgElement);
+            copyPNGByLink(imgElement.getAttribute("src"));
         }
     }).element);
     if (!protyle.disabled) {
@@ -1086,9 +1086,7 @@ export const imgMenu = (protyle: IProtyle, range: Range, assetElement: HTMLEleme
         window.siyuan.menus.menu.append(new MenuItem({type: "separator"}).element);
         openMenu(protyle.app, imgSrc, false, false);
     }
-    /// #if !BROWSER
     window.siyuan.menus.menu.append(new MenuItem(exportAsset(imgElement.getAttribute("data-src"))).element);
-    /// #endif
     if (protyle?.app?.plugins) {
         emitOpenMenu({
             plugins: protyle.app.plugins,
@@ -1220,11 +1218,9 @@ export const linkMenu = (protyle: IProtyle, linkElement: HTMLElement, focusText 
     }
     if (linkAddress) {
         openMenu(protyle.app, linkAddress, false, true);
-        /// #if !BROWSER
         if (linkAddress?.startsWith("assets/")) {
             window.siyuan.menus.menu.append(new MenuItem(exportAsset(linkAddress)).element);
         }
-        /// #endif
     }
     if (!protyle.disabled) {
         if (linkAddress?.startsWith("assets/")) {
@@ -1392,7 +1388,7 @@ export const tagMenu = (protyle: IProtyle, tagElement: HTMLElement) => {
     /// #if !MOBILE
     window.siyuan.menus.menu.append(new MenuItem({
         label: window.siyuan.languages.search,
-        accelerator: "Click",
+        accelerator: window.siyuan.languages.click,
         icon: "iconSearch",
         click() {
             openGlobalSearch(protyle.app, `#${tagElement.textContent}#`, false);
@@ -1583,9 +1579,7 @@ export const videoMenu = (protyle: IProtyle, nodeElement: Element, type: string)
             submenu: openMenu(protyle.app, VideoSrc, true, false) as IMenu[]
         });
     }
-    /// #if !BROWSER
     subMenus.push(exportAsset(src));
-    /// #endif
     return subMenus;
 };
 
@@ -1935,7 +1929,7 @@ export const setFold = (protyle: IProtyle, nodeElement: Element, isOpen?: boolea
     const id = nodeElement.getAttribute("data-node-id");
     if (nodeElement.getAttribute("data-type") === "NodeHeading") {
         if (hasFold) {
-            nodeElement.insertAdjacentHTML("beforeend", '<div spin="1" style="text-align: center"><img width="24px" src="/stage/loading-pure.svg"></div>');
+            nodeElement.insertAdjacentHTML("beforeend", '<div spin="1" style="text-align: center"><img width="24px" height="24px" src="/stage/loading-pure.svg"></div>');
             transaction(protyle, [{
                 action: "unfoldHeading",
                 id,
