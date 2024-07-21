@@ -167,6 +167,37 @@ func CheckAuth(c *gin.Context) {
 	c.Next()
 }
 
+func CheckAdminRole(c *gin.Context) {
+	if IsAdminRoleContext(c) {
+		c.Next()
+	} else {
+		c.AbortWithStatus(http.StatusForbidden)
+	}
+}
+
+func CheckEditRole(c *gin.Context) {
+	if IsValidRole(GetGinContextRole(c), []Role{
+		RoleAdministrator,
+		RoleEditor,
+	}) {
+		c.Next()
+	} else {
+		c.AbortWithStatus(http.StatusForbidden)
+	}
+}
+
+func CheckReadRole(c *gin.Context) {
+	if IsValidRole(GetGinContextRole(c), []Role{
+		RoleAdministrator,
+		RoleEditor,
+		RoleReader,
+	}) {
+		c.Next()
+	} else {
+		c.AbortWithStatus(http.StatusForbidden)
+	}
+}
+
 var timingAPIs = map[string]int{
 	"/api/search/fullTextSearchBlock": 200, // Monitor the search performance and suggest solutions https://github.com/siyuan-note/siyuan/issues/7873
 }
@@ -197,11 +228,7 @@ func Timing(c *gin.Context) {
 }
 
 func Recover(c *gin.Context) {
-	defer func() {
-		logging.Recover()
-		c.Status(http.StatusInternalServerError)
-	}()
-
+	defer logging.Recover()
 	c.Next()
 }
 
