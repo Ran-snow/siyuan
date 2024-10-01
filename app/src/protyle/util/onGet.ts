@@ -186,7 +186,11 @@ const setHTML = (options: {
         const editElement = getContenteditableElement(protyle.wysiwyg.element.firstElementChild);
         if (editElement && editElement.textContent === "") {
             editElement.classList.add("protyle-wysiwyg--empty");
+            /// #if MOBILE
+            editElement.setAttribute("placeholder", window.siyuan.languages.emptyMobilePlaceholder);
+            /// #else
             editElement.setAttribute("placeholder", window.siyuan.languages.emptyPlaceholder);
+            /// #endif
         }
     }
 
@@ -244,6 +248,12 @@ const setHTML = (options: {
         });
         return;
     }
+
+    /// #if MOBILE
+    if (!protyle.disabled && !options.action.includes(Constants.CB_GET_ALL)) {
+        protyle.background.element.classList.add("protyle-background--mobileshow");
+    }
+    /// #endif
 
     if (protyle.options.render.breadcrumb) {
         protyle.breadcrumb.toggleExit(!options.action.includes(Constants.CB_GET_ALL));

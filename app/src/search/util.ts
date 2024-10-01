@@ -23,7 +23,7 @@ import {addLoading} from "../protyle/ui/initUI";
 import {getIconByType} from "../editor/getIcon";
 import {unicode2Emoji} from "../emoji";
 import {hasClosestByClassName} from "../protyle/util/hasClosest";
-import {isNotCtrl, isMac, setStorageVal, updateHotkeyTip} from "../protyle/util/compatibility";
+import {isNotCtrl, setStorageVal, updateHotkeyTip} from "../protyle/util/compatibility";
 import {newFileByName} from "../util/newFile";
 import {
     filterMenu,
@@ -359,7 +359,7 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
         <kbd>${updateHotkeyTip(window.siyuan.config.keymap.general.newFile.custom)}</kbd> ${window.siyuan.languages.new}
         <kbd>${window.siyuan.languages.enterKey}/${window.siyuan.languages.doubleClick}</kbd> ${window.siyuan.languages.searchTip2}
         <kbd>${window.siyuan.languages.click}</kbd> ${window.siyuan.languages.searchTip3}
-        <kbd>${updateHotkeyTip(window.siyuan.config.keymap.editor.general.insertRight.custom)}/${isMac() ? "⌥" : "Alt+"}${window.siyuan.languages.click}</kbd> ${window.siyuan.languages.searchTip4}
+        <kbd>${updateHotkeyTip(window.siyuan.config.keymap.editor.general.insertRight.custom)}/${updateHotkeyTip("⌥" + window.siyuan.languages.click)}</kbd> ${window.siyuan.languages.searchTip4}
         <kbd>Esc</kbd> ${window.siyuan.languages.searchTip5}
     </div>
 </div>
@@ -561,6 +561,22 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
                         return true;
                     }
                 });
+                if (target.parentElement.classList.contains("b3-chip--current")) {
+                    updateConfig(element, {
+                        removed: true,
+                        sort: 0,
+                        group: 0,
+                        hasReplace: false,
+                        method: 0,
+                        hPath: "",
+                        idPath: [],
+                        k: "",
+                        r: "",
+                        page: 1,
+                        types: getDefaultType(),
+                        replaceTypes: Object.assign({}, Constants.SIYUAN_DEFAULT_REPLACETYPES),
+                    }, config, edit, true);
+                }
                 target.parentElement.remove();
                 event.stopPropagation();
                 event.preventDefault();
@@ -1073,7 +1089,7 @@ export const getQueryTip = (method: number) => {
 };
 
 export const updateConfig = (element: Element, item: Config.IUILayoutTabSearchConfig, config: Config.IUILayoutTabSearchConfig,
-                      edit: Protyle, clear = false) => {
+                             edit: Protyle, clear = false) => {
     const dialogElement = hasClosestByClassName(element, "b3-dialog--open");
     if (dialogElement && dialogElement.getAttribute("data-key") === Constants.DIALOG_SEARCH) {
         // https://github.com/siyuan-note/siyuan/issues/6828
@@ -1245,6 +1261,7 @@ export const replace = (element: Element, config: Config.IUILayoutTabSearchConfi
             return;
         }
         if (isAll) {
+            inputEvent(element, config, edit, true);
             return;
         }
         const rootId = currentList.getAttribute("data-root-id");
@@ -1376,6 +1393,7 @@ const onSearch = (data: IBlock[], edit: Protyle, element: Element, config: Confi
     let resultHTML = "";
     data.forEach((item, index) => {
         const title = getNotebookName(item.box) + getDisplayName(item.hPath, false);
+        const tags = item.tag ? `<span class="b3-list-item__meta b3-list-item__meta--ellipsis">${item.tag.split("# #").map(tag => `${tag.replace("#", "")}`).join(" ").replace("#", "")}</span>` : "";
         if (item.children) {
             resultHTML += `<div class="b3-list-item">
 <span class="b3-list-item__toggle b3-list-item__toggle--hl">
@@ -1399,6 +1417,7 @@ ${getAttr(childItem)}
 ${unicode2Emoji(item.ial.icon, "b3-list-item__graphic", true)}
 <span class="b3-list-item__text">${item.content}</span>
 ${getAttr(item)}
+${tags}
 <span class="b3-list-item__meta b3-list-item__meta--ellipsis ariaLabel" aria-label="${escapeAriaLabel(title)}">${escapeGreat(title)}</span>
 </div>`;
         }

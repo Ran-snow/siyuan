@@ -55,7 +55,7 @@ func GetDocInfo(blockID string) (ret *BlockInfo) {
 	WaitForWritingFiles()
 
 	tree, err := LoadTreeByBlockID(blockID)
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("load tree by root id [%s] failed: %s", blockID, err)
 		return
 	}
@@ -111,7 +111,7 @@ func GetDocInfo(blockID string) (ret *BlockInfo) {
 	var subFileCount int
 	boxLocalPath := filepath.Join(util.DataDir, tree.Box)
 	subFiles, err := os.ReadDir(filepath.Join(boxLocalPath, strings.TrimSuffix(tree.Path, ".sy")))
-	if nil == err {
+	if err == nil {
 		for _, subFile := range subFiles {
 			if strings.HasSuffix(subFile.Name(), ".sy") {
 				subFileCount++
@@ -130,7 +130,7 @@ func GetBlockRefText(id string) string {
 	}
 
 	tree, err := LoadTreeByBlockID(id)
-	if nil != err {
+	if err != nil {
 		return ""
 	}
 
@@ -215,21 +215,21 @@ func getNodeRefText0(node *ast.Node) string {
 	return ret
 }
 
-func GetBlockRefIDs(id string) (refIDs, refTexts, defIDs []string) {
+func GetBlockRefs(defID string) (refIDs, refTexts, defIDs []string) {
 	refIDs = []string{}
 	refTexts = []string{}
 	defIDs = []string{}
-	bt := treenode.GetBlockTree(id)
+	bt := treenode.GetBlockTree(defID)
 	if nil == bt {
 		return
 	}
 
 	isDoc := bt.ID == bt.RootID
-	refIDs, refTexts = sql.QueryRefIDsByDefID(id, isDoc)
+	refIDs, refTexts = sql.QueryRefIDsByDefID(defID, isDoc)
 	if isDoc {
-		defIDs = sql.QueryChildDefIDsByRootDefID(id)
+		defIDs = sql.QueryChildDefIDsByRootDefID(defID)
 	} else {
-		defIDs = append(defIDs, id)
+		defIDs = append(defIDs, defID)
 	}
 	return
 }

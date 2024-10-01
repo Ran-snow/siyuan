@@ -4,11 +4,12 @@ import {
     hasClosestByAttribute,
     hasClosestByClassName,
     hasClosestByTag,
-    hasTopClosestByAttribute, isInEmbedBlock
+    hasTopClosestByAttribute,
+    isInEmbedBlock
 } from "./hasClosest";
 import {Constants} from "../../constants";
 import {paste} from "./paste";
-import {cancelSB, genEmptyElement, genSBElement} from "../../block/util";
+import {cancelSB, genEmptyElement, genSBElement, insertEmptyBlock} from "../../block/util";
 import {transaction} from "../wysiwyg/transaction";
 import {getTopAloneElement} from "../wysiwyg/getBlock";
 import {updateListOrder} from "../wysiwyg/list";
@@ -783,6 +784,7 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
         document.onmouseup = null;
     });
     editorElement.addEventListener("drop", async (event: DragEvent & { target: HTMLElement }) => {
+        counter = 0;
         if (protyle.disabled || event.dataTransfer.getData(Constants.SIYUAN_DROP_EDITOR)) {
             // 只读模式/编辑器内选中文字拖拽
             event.preventDefault();
@@ -797,7 +799,7 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
         }
         const targetElement = editorElement.querySelector(".dragover__left, .dragover__right, .dragover__bottom, .dragover__top");
         if (targetElement) {
-            targetElement.classList.remove("protyle-wysiwyg--select");
+            targetElement.classList.remove("protyle-wysiwyg--select", "dragover");
             targetElement.removeAttribute("select-start");
             targetElement.removeAttribute("select-end");
         }
@@ -806,8 +808,19 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
             const sourceElements: Element[] = [];
             const gutterTypes = gutterType.replace(Constants.SIYUAN_DROP_GUTTER, "").split(Constants.ZWSP);
             const selectedIds = gutterTypes[2].split(",");
+            if (event.altKey || event.shiftKey) {
+                if (event.y > protyle.wysiwyg.element.lastElementChild.getBoundingClientRect().bottom) {
+                    insertEmptyBlock(protyle, "afterend", protyle.wysiwyg.element.lastElementChild.getAttribute("data-node-id"));
+                } else {
+                    const range = getRangeByPoint(event.clientX, event.clientY);
+                    if (hasClosestByAttribute(range.startContainer, "data-type", "NodeBlockQueryEmbed")) {
+                        return;
+                    } else {
+                        focusByRange(range);
+                    }
+                }
+            }
             if (event.altKey) {
-                focusByRange(getRangeByPoint(event.clientX, event.clientY));
                 let html = "";
                 for (let i = 0; i < selectedIds.length; i++) {
                     const response = await fetchSyncPost("/api/block/getRefText", {id: selectedIds[i]});
@@ -815,7 +828,6 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                 }
                 insertHTML(html, protyle);
             } else if (event.shiftKey) {
-                focusByRange(getRangeByPoint(event.clientX, event.clientY));
                 let html = "";
                 selectedIds.forEach(item => {
                     html += `{{select * from blocks where id='${item}'}}\n`;
@@ -1164,8 +1176,20 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
         }
         // 编辑器内文字拖拽或资源文件拖拽或按住 alt/shift 拖拽反链图标进入编辑器时不能运行 event.preventDefault()， 否则无光标; 需放在 !window.siyuan.dragElement 之后
         event.preventDefault();
-        let targetElement = hasClosestByClassName(event.target, "av__row") || hasClosestBlock(event.target);
+        let targetElement = hasClosestByClassName(event.target, "av__row") || hasClosestByClassName(event.target, "av__row--util") || hasClosestBlock(event.target);
         const point = {x: event.clientX, y: event.clientY, className: ""};
+
+        // 超级块中有a，b两个段落块，移动到 ab 之间的间隙 targetElement 会变为超级块，需修正为 a
+        if (targetElement && (targetElement.classList.contains("bq") || targetElement.classList.contains("sb") || targetElement.classList.contains("list") || targetElement.classList.contains("li"))) {
+            let prevElement = hasClosestBlock(document.elementFromPoint(point.x, point.y - 6));
+            while (prevElement && targetElement.contains(prevElement)) {
+                if (prevElement.nextElementSibling?.getAttribute("data-node-id")) {
+                    targetElement = prevElement;
+                }
+                prevElement = prevElement.parentElement;
+            }
+        }
+
         if (!targetElement) {
             if (event.clientY > editorElement.lastElementChild.getBoundingClientRect().bottom) {
                 // 命中底部
@@ -1217,7 +1241,8 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
             }
         } else if (targetElement && gutterType && gutterType.startsWith(`${Constants.SIYUAN_DROP_GUTTER}NodeAttributeViewRowMenu${Constants.ZWSP}`.toLowerCase())) {
             // 行只能拖拽当前 av 中
-            if (!targetElement.classList.contains("av__row") || !window.siyuan.dragElement.contains(targetElement)) {
+            if ((!targetElement.classList.contains("av__row") && !targetElement.classList.contains("av__row--util")) ||
+                !window.siyuan.dragElement.contains(targetElement)) {
                 targetElement = false;
             }
         }
@@ -1228,8 +1253,8 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
         if (targetElement && dragoverElement && targetElement.isSameNode(dragoverElement)) {
             // 性能优化，目标为同一个元素不再进行校验
             const nodeRect = targetElement.getBoundingClientRect();
-            editorElement.querySelectorAll(".dragover__left, .dragover__right, .dragover__bottom, .dragover__top").forEach((item: HTMLElement) => {
-                item.classList.remove("dragover__top", "dragover__bottom", "dragover__left", "dragover__right", "protyle-wysiwyg--select");
+            editorElement.querySelectorAll(".dragover__left, .dragover__right, .dragover__bottom, .dragover__top, .dragover").forEach((item: HTMLElement) => {
+                item.classList.remove("dragover__top", "dragover__bottom", "dragover__left", "dragover__right", "dragover");
                 item.removeAttribute("select-start");
                 item.removeAttribute("select-end");
             });
@@ -1238,13 +1263,16 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
             }
             if (point.className) {
                 targetElement.classList.add(point.className);
+                addDragover(targetElement);
                 return;
             }
             if (targetElement.getAttribute("data-type") === "NodeListItem" || fileTreeIds.indexOf("-") > -1) {
                 if (event.clientY > nodeRect.top + nodeRect.height / 2) {
                     targetElement.classList.add("dragover__bottom");
+                    addDragover(targetElement);
                 } else if (!targetElement.classList.contains("av__row--header")) {
                     targetElement.classList.add("dragover__top");
+                    addDragover(targetElement);
                 }
                 return;
             }
@@ -1266,14 +1294,22 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
             if (event.clientX < nodeRect.left + 32 && event.clientX >= nodeRect.left - 1 &&
                 !targetElement.classList.contains("av__row")) {
                 targetElement.classList.add("dragover__left");
+                addDragover(targetElement);
             } else if (event.clientX > nodeRect.right - 32 && event.clientX < nodeRect.right &&
                 !targetElement.classList.contains("av__row")) {
                 targetElement.classList.add("dragover__right");
+                addDragover(targetElement);
+            } else if (targetElement.classList.contains("av__row--header")) {
+                targetElement.classList.add("dragover__bottom");
+            } else if (targetElement.classList.contains("av__row--util")) {
+                targetElement.previousElementSibling.classList.add("dragover__bottom");
             } else {
                 if (event.clientY > nodeRect.top + nodeRect.height / 2 && disabledPosition !== "bottom") {
                     targetElement.classList.add("dragover__bottom");
+                    addDragover(targetElement);
                 } else if (disabledPosition !== "top") {
                     targetElement.classList.add("dragover__top");
+                    addDragover(targetElement);
                 }
             }
             return;
@@ -1337,14 +1373,31 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
             dragoverElement = targetElement;
         }
     });
-    editorElement.addEventListener("dragleave", (event) => {
+    let counter = 0;
+    editorElement.addEventListener("dragleave", (event: DragEvent & { target: HTMLElement }) => {
         if (protyle.disabled) {
             event.preventDefault();
             event.stopPropagation();
             return;
         }
-        editorElement.querySelectorAll(".dragover__left, .dragover__right, .dragover__bottom, .dragover__top").forEach((item: HTMLElement) => {
-            item.classList.remove("dragover__top", "dragover__bottom", "dragover__left", "dragover__right");
-        });
+        counter--;
+        if (counter === 0) {
+            editorElement.querySelectorAll(".dragover__left, .dragover__right, .dragover__bottom, .dragover__top, .dragover").forEach((item: HTMLElement) => {
+                item.classList.remove("dragover__top", "dragover__bottom", "dragover__left", "dragover__right", "dragover");
+            });
+        }
     });
+    editorElement.addEventListener("dragenter", (event) => {
+        event.preventDefault();
+        counter++;
+    });
+};
+
+const addDragover = (element: HTMLElement) => {
+    if (element.classList.contains("sb") ||
+        element.classList.contains("li") ||
+        element.classList.contains("list") ||
+        element.classList.contains("bq")) {
+        element.classList.add("dragover");
+    }
 };

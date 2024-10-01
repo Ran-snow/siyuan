@@ -98,7 +98,6 @@ export const avClick = (protyle: IProtyle, event: MouseEvent & { target: HTMLEle
         event.stopPropagation();
         return true;
     }
-
     const viewItemElement = hasClosestByClassName(event.target, "item");
     if (viewItemElement && viewItemElement.parentElement.classList.contains("layout-tab-bar")) {
         if (viewItemElement.classList.contains("item--focus")) {
@@ -256,10 +255,7 @@ export const avContextmenu = (protyle: IProtyle, rowElement: HTMLElement, positi
         });
     }
 
-    const menu = new Menu("av-row-menu");
-    if (menu.isOpen) {
-        return true;
-    }
+    const menu = new Menu();
     rowElement.classList.add("av__row--select");
     rowElement.querySelector(".av__firstcol use").setAttribute("xlink:href", "#iconCheck");
     const rowElements = blockElement.querySelectorAll(".av__row--select:not(.av__row--header)");
@@ -496,7 +492,7 @@ export const removeAttrViewColAnimation = (blockElement: Element, id: string) =>
     });
 };
 
-export const duplicateCompletely = (protyle:IProtyle, nodeElement:HTMLElement) => {
+export const duplicateCompletely = (protyle: IProtyle, nodeElement: HTMLElement) => {
     fetchPost("/api/av/duplicateAttributeViewBlock", {avID: nodeElement.getAttribute("data-av-id")}, (response) => {
         nodeElement.classList.remove("protyle-wysiwyg--select");
         const tempElement = document.createElement("template");

@@ -165,7 +165,7 @@ func renderBlockContentByNodes(nodes []*ast.Node) string {
 	return buf.String()
 }
 
-func resolveEmbedR(n *ast.Node, blockEmbedMode int, luteEngine *lute.Lute, resolved *[]string) {
+func resolveEmbedR(n *ast.Node, blockEmbedMode int, luteEngine *lute.Lute, resolved *[]string, depth *int) {
 	var children []*ast.Node
 	if ast.NodeHeading == n.Type {
 		children = append(children, n)
@@ -178,8 +178,22 @@ func resolveEmbedR(n *ast.Node, blockEmbedMode int, luteEngine *lute.Lute, resol
 		children = append(children, n)
 	}
 
+	*depth++
+	if 7 < *depth {
+		return
+	}
+
 	for _, child := range children {
 		var unlinks []*ast.Node
+
+		parentHeadingLevel := 0
+		for prev := child; nil != prev; prev = prev.Previous {
+			if ast.NodeHeading == prev.Type {
+				parentHeadingLevel = prev.HeadingLevel
+				break
+			}
+		}
+
 		ast.Walk(child, func(n *ast.Node, entering bool) ast.WalkStatus {
 			if !entering || !n.IsBlock() {
 				return ast.WalkContinue
@@ -196,17 +210,42 @@ func resolveEmbedR(n *ast.Node, blockEmbedMode int, luteEngine *lute.Lute, resol
 				stmt = strings.ReplaceAll(stmt, editor.IALValEscNewLine, "\n")
 				sqlBlocks := sql.SelectBlocksRawStmt(stmt, 1, Conf.Search.Limit)
 				for _, sqlBlock := range sqlBlocks {
-					md := sqlBlock.Markdown
+					if "query_embed" == sqlBlock.Type {
+						continue
+					}
 
+					subTree, _ := LoadTreeByBlockID(sqlBlock.ID)
+					var md string
 					if "d" == sqlBlock.Type {
-						subTree, _ := LoadTreeByBlockID(sqlBlock.ID)
 						md, _ = lute.FormatNodeSync(subTree.Root, luteEngine.ParseOptions, luteEngine.RenderOptions)
 					} else if "h" == sqlBlock.Type {
-						subTree, _ := LoadTreeByBlockID(sqlBlock.ID)
 						h := treenode.GetNodeInTree(subTree, sqlBlock.ID)
 						var hChildren []*ast.Node
 						hChildren = append(hChildren, h)
 						hChildren = append(hChildren, treenode.HeadingChildren(h)...)
+
+						if 0 == blockEmbedMode {
+							// 嵌入块中出现了大于等于上方非嵌入块的标题时需要降低嵌入块中的标题级别
+							// Improve export of heading levels in embedded blocks https://github.com/siyuan-note/siyuan/issues/12233
+							embedTopLevel := 0
+							for _, hChild := range hChildren {
+								if ast.NodeHeading == hChild.Type {
+									embedTopLevel = hChild.HeadingLevel
+									break
+								}
+							}
+							if parentHeadingLevel >= embedTopLevel {
+								for _, hChild := range hChildren {
+									if ast.NodeHeading == hChild.Type {
+										hChild.HeadingLevel += parentHeadingLevel - embedTopLevel + 1
+										if 6 < hChild.HeadingLevel {
+											hChild.HeadingLevel = 6
+										}
+									}
+								}
+							}
+						}
+
 						mdBuf := &bytes.Buffer{}
 						for _, hChild := range hChildren {
 							md, _ = lute.FormatNodeSync(hChild, luteEngine.ParseOptions, luteEngine.RenderOptions)
@@ -214,6 +253,9 @@ func resolveEmbedR(n *ast.Node, blockEmbedMode int, luteEngine *lute.Lute, resol
 							mdBuf.WriteString("\n\n")
 						}
 						md = mdBuf.String()
+					} else {
+						node := treenode.GetNodeInTree(subTree, sqlBlock.ID)
+						md, _ = lute.FormatNodeSync(node, luteEngine.ParseOptions, luteEngine.RenderOptions)
 					}
 
 					buf := &bytes.Buffer{}
@@ -230,7 +272,7 @@ func resolveEmbedR(n *ast.Node, blockEmbedMode int, luteEngine *lute.Lute, resol
 					}
 					buf.WriteString("\n\n")
 
-					subTree := parse.Parse("", buf.Bytes(), luteEngine.ParseOptions)
+					subTree = parse.Parse("", buf.Bytes(), luteEngine.ParseOptions)
 					var inserts []*ast.Node
 					for subNode := subTree.Root.FirstChild; nil != subNode; subNode = subNode.Next {
 						if ast.NodeKramdownBlockIAL != subNode.Type {
@@ -239,7 +281,12 @@ func resolveEmbedR(n *ast.Node, blockEmbedMode int, luteEngine *lute.Lute, resol
 					}
 					for _, insert := range inserts {
 						n.InsertBefore(insert)
-						resolveEmbedR(insert, blockEmbedMode, luteEngine, resolved)
+
+						if gulu.Str.Contains(sqlBlock.ID, *resolved) {
+							return ast.WalkContinue
+						}
+
+						resolveEmbedR(insert, blockEmbedMode, luteEngine, resolved, depth)
 					}
 				}
 				unlinks = append(unlinks, n)
@@ -267,7 +314,7 @@ func renderBlockMarkdownR(id string, rendered *[]string) (ret []*ast.Node) {
 
 	var err error
 	var t *parse.Tree
-	if t, err = LoadTreeByBlockID(b.ID); nil != err {
+	if t, err = LoadTreeByBlockID(b.ID); err != nil {
 		return
 	}
 	node := treenode.GetNodeInTree(t, b.ID)

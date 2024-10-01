@@ -124,7 +124,7 @@ export class BlockPanel {
                         openFileById({
                             app: options.app,
                             id: this.nodeIds[0],
-                            action: this.editors[0].protyle.block.rootID !== this.nodeIds[0] ? [Constants.CB_GET_ALL] : [Constants.CB_GET_CONTEXT],
+                            action: this.editors[0].protyle.block.rootID !== this.nodeIds[0] ? [Constants.CB_GET_ALL, Constants.CB_GET_FOCUS] : [Constants.CB_GET_CONTEXT],
                         });
                         /// #endif
                     }
@@ -183,9 +183,6 @@ export class BlockPanel {
                 },
                 typewriterMode: false,
                 after: (editor) => {
-                    editorElement.addEventListener("mouseleave", () => {
-                        hideElements(["gutter"], editor.protyle);
-                    });
                     if (response.data.rootID !== this.nodeIds[index]) {
                         editor.protyle.breadcrumb.element.parentElement.lastElementChild.classList.remove("fn__none");
                     }
@@ -240,7 +237,7 @@ export class BlockPanel {
         let openHTML = "";
         /// #if !BROWSER
         if (this.nodeIds.length === 1) {
-            openHTML = `<span data-type="stickTab" class="block__icon block__icon--show b3-tooltips b3-tooltips__sw" aria-label="${window.siyuan.languages.openInNewTab}"><svg><use xlink:href="#iconLayoutRight"></use></svg></span>
+            openHTML = `<span data-type="stickTab" class="block__icon block__icon--show b3-tooltips b3-tooltips__sw" aria-label="${window.siyuan.languages.openBy}"><svg><use xlink:href="#iconOpen"></use></svg></span>
 <span class="fn__space"></span>
 <span data-type="open" class="block__icon block__icon--show b3-tooltips b3-tooltips__sw" aria-label="${window.siyuan.languages.openByNewWindow}"><svg><use xlink:href="#iconOpenWindow"></use></svg></span>
 <span class="fn__space"></span>`;

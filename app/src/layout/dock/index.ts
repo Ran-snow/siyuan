@@ -300,7 +300,8 @@ export class Dock {
         });
 
         this.layout.element.addEventListener("mouseleave", (event: MouseEvent & { toElement: HTMLElement }) => {
-            if (event.buttons !== 0 || this.pin || event.toElement?.classList.contains("b3-menu")) {
+            if (event.buttons !== 0 || this.pin || event.toElement?.classList.contains("b3-menu") ||
+                event.toElement?.classList.contains("tooltip")) {
                 return;
             }
             if (this.position === "Left" && event.clientX < 43) {
@@ -593,7 +594,7 @@ export class Dock {
                                     type: "pin",
                                     tab,
                                     blockId: editor?.protyle?.block?.rootID,
-                                    isPreview: !editor?.protyle?.preview?.element.classList.contains("fn__none")
+                                    isPreview: editor?.protyle?.preview ? !editor.protyle.preview.element.classList.contains("fn__none") : false
                                 });
                                 if (editor?.protyle?.title?.editElement) {
                                     outline.updateDocTitle(editor.protyle?.background?.ial);

@@ -317,7 +317,8 @@ export const saveCriterion = (config: Config.IUILayoutTabSearchConfig,
         saveDialog.destroy();
     });
     btnsElement[1].addEventListener("click", () => {
-        const value = saveDialog.element.querySelector("input").value.trim();
+        const inputElement = saveDialog.element.querySelector("input");
+        const value = inputElement.value.trim();
         if (!value) {
             showMessage(window.siyuan.languages["_kernel"]["142"]);
             return;
@@ -340,6 +341,7 @@ export const saveCriterion = (config: Config.IUILayoutTabSearchConfig,
                 hasSameConfig = item.name;
             }
         });
+        inputElement.blur();
         if (hasSameName && !hasSameConfig) {
             confirmDialog(window.siyuan.languages.confirm, window.siyuan.languages.searchOverwrite, () => {
                 Array.from(criteriaElement.children).forEach(item => {
@@ -632,16 +634,11 @@ export const initCriteriaMenu = (element: HTMLElement, data: Config.IUILayoutTab
             html += `<div data-type="set-criteria" class="${isSame ? "b3-chip--current " : ""}b3-chip b3-chip--middle b3-chip--pointer b3-chip--${["secondary", "primary", "info", "success", "warning", "error", ""][index % 7]}">${escapeHtml(item.name)}<svg class="b3-chip__close" data-type="remove-criteria"><use xlink:href="#iconCloseRound"></use></svg></div>`;
         });
         /// #if MOBILE
-        element.innerHTML = `<div class="b3-chips">
+        element.innerHTML = `<div class="b3-chips${html?"":" fn__none"}">
     ${html}
 </div>`;
-        if (html === "") {
-            element.classList.add("fn__none");
-        } else {
-            element.classList.remove("fn__none");
-        }
         /// #else
-        element.innerHTML = `<div class="b3-chips">
+        element.innerHTML = `<div class="b3-chips${html ? "" : " fn__none"}">
     ${html}
 </div>
 <span class="fn__flex-1"></span>

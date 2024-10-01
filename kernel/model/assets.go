@@ -54,7 +54,7 @@ import (
 
 func DocImageAssets(rootID string) (ret []string, err error) {
 	tree, err := LoadTreeByBlockID(rootID)
-	if nil != err {
+	if err != nil {
 		return
 	}
 
@@ -77,7 +77,7 @@ func DocImageAssets(rootID string) (ret []string, err error) {
 
 func NetAssets2LocalAssets(rootID string, onlyImg bool, originalURL string) (err error) {
 	tree, err := LoadTreeByBlockID(rootID)
-	if nil != err {
+	if err != nil {
 		return
 	}
 
@@ -87,7 +87,7 @@ func NetAssets2LocalAssets(rootID string, onlyImg bool, originalURL string) (err
 	docDirLocalPath := filepath.Join(util.DataDir, tree.Box, path.Dir(tree.Path))
 	assetsDirPath := getAssetsDir(filepath.Join(util.DataDir, tree.Box), docDirLocalPath)
 	if !gulu.File.IsExist(assetsDirPath) {
-		if err = os.MkdirAll(assetsDirPath, 0755); nil != err {
+		if err = os.MkdirAll(assetsDirPath, 0755); err != nil {
 			return
 		}
 	}
@@ -127,7 +127,7 @@ func NetAssets2LocalAssets(rootID string, onlyImg bool, originalURL string) (err
 				name = "network-asset-" + name
 				name = util.AssetName(name)
 				writePath := filepath.Join(assetsDirPath, name)
-				if err = filelock.Copy(u, writePath); nil != err {
+				if err = filelock.Copy(u, writePath); err != nil {
 					logging.LogErrorf("copy [%s] to [%s] failed: %s", u, writePath, err)
 					continue
 				}
@@ -223,7 +223,7 @@ func NetAssets2LocalAssets(rootID string, onlyImg bool, originalURL string) (err
 				name = util.TruncateLenFileName(name)
 				name = "network-asset-" + name + "-" + ast.NewNodeID() + ext
 				writePath := filepath.Join(assetsDirPath, name)
-				if err = filelock.WriteFile(writePath, data); nil != err {
+				if err = filelock.WriteFile(writePath, data); err != nil {
 					logging.LogErrorf("write downloaded network asset [%s] to local asset [%s] failed: %s", u, writePath, err)
 					continue
 				}
@@ -237,7 +237,7 @@ func NetAssets2LocalAssets(rootID string, onlyImg bool, originalURL string) (err
 
 	if 0 < files {
 		util.PushUpdateMsg(msgId, Conf.Language(113), 7000)
-		if err = writeTreeUpsertQueue(tree); nil != err {
+		if err = writeTreeUpsertQueue(tree); err != nil {
 			return
 		}
 		util.PushUpdateMsg(msgId, fmt.Sprintf(Conf.Language(120), files), 5000)
@@ -303,7 +303,7 @@ func GetAssetAbsPath(relativePath string) (ret string, err error) {
 		relativePath = relativePath[:strings.Index(relativePath, "?")]
 	}
 	notebooks, err := ListNotebooks()
-	if nil != err {
+	if err != nil {
 		err = errors.New(Conf.Language(0))
 		return
 	}
@@ -355,7 +355,7 @@ func UploadAssets2Cloud(rootID string) (count int, err error) {
 	}
 
 	tree, err := LoadTreeByBlockID(rootID)
-	if nil != err {
+	if err != nil {
 		return
 	}
 
@@ -366,7 +366,7 @@ func UploadAssets2Cloud(rootID string) (count int, err error) {
 	assets = append(assets, avAssets...)
 	assets = gulu.Str.RemoveDuplicatedElem(assets)
 	count, err = uploadAssets2Cloud(assets, bizTypeUploadAssets)
-	if nil != err {
+	if err != nil {
 		return
 	}
 	return
@@ -383,7 +383,7 @@ func uploadAssets2Cloud(assetPaths []string, bizType string) (count int, err err
 	for _, assetPath := range assetPaths {
 		var absPath string
 		absPath, err = GetAssetAbsPath(assetPath)
-		if nil != err {
+		if err != nil {
 			logging.LogWarnf("get asset [%s] abs path failed: %s", assetPath, err)
 			return
 		}
@@ -486,17 +486,19 @@ func uploadAssets2Cloud(assetPaths []string, bizType string) (count int, err err
 }
 
 func RemoveUnusedAssets() (ret []string) {
+	ret = []string{}
+	var size int64
+
 	msgId := util.PushMsg(Conf.Language(100), 30*1000)
 	defer func() {
-		util.PushClearMsg(msgId)
-		util.PushMsg(Conf.Language(99), 3000)
+		msg := fmt.Sprintf(Conf.Language(91), len(ret), humanize.BytesCustomCeil(uint64(size), 2))
+		util.PushUpdateMsg(msgId, msg, 7000)
 	}()
 
-	ret = []string{}
 	unusedAssets := UnusedAssets()
 
 	historyDir, err := GetHistoryDir(HistoryOpClean)
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("get history dir failed: %s", err)
 		return
 	}
@@ -509,7 +511,7 @@ func RemoveUnusedAssets() (ret []string) {
 				continue
 			}
 
-			if err = filelock.Copy(p, historyPath); nil != err {
+			if err = filelock.Copy(p, historyPath); err != nil {
 				return
 			}
 
@@ -522,7 +524,12 @@ func RemoveUnusedAssets() (ret []string) {
 
 	for _, unusedAsset := range unusedAssets {
 		if unusedAsset = filepath.Join(util.DataDir, unusedAsset); filelock.IsExist(unusedAsset) {
-			if err := filelock.Remove(unusedAsset); nil != err {
+			info, statErr := os.Stat(unusedAsset)
+			if statErr == nil {
+				size += info.Size()
+			}
+
+			if err := filelock.Remove(unusedAsset); err != nil {
 				logging.LogErrorf("remove unused asset [%s] failed: %s", unusedAsset, err)
 			}
 		}
@@ -544,7 +551,7 @@ func RemoveUnusedAsset(p string) (ret string) {
 	}
 
 	historyDir, err := GetHistoryDir(HistoryOpClean)
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("get history dir failed: %s", err)
 		return
 	}
@@ -552,7 +559,7 @@ func RemoveUnusedAsset(p string) (ret string) {
 	newP := strings.TrimPrefix(absPath, util.DataDir)
 	historyPath := filepath.Join(historyDir, newP)
 	if filelock.IsExist(absPath) {
-		if err = filelock.Copy(absPath, historyPath); nil != err {
+		if err = filelock.Copy(absPath, historyPath); err != nil {
 			return
 		}
 
@@ -560,7 +567,7 @@ func RemoveUnusedAsset(p string) (ret string) {
 		sql.BatchRemoveAssetsQueue([]string{hash})
 	}
 
-	if err = filelock.Remove(absPath); nil != err {
+	if err = filelock.Remove(absPath); err != nil {
 		logging.LogErrorf("remove unused asset [%s] failed: %s", absPath, err)
 	}
 	ret = absPath
@@ -591,14 +598,14 @@ func RenameAsset(oldPath, newName string) (newPath string, err error) {
 
 	newName = util.AssetName(newName + filepath.Ext(oldPath))
 	newPath = "assets/" + newName
-	if err = filelock.Copy(filepath.Join(util.DataDir, oldPath), filepath.Join(util.DataDir, newPath)); nil != err {
+	if err = filelock.Copy(filepath.Join(util.DataDir, oldPath), filepath.Join(util.DataDir, newPath)); err != nil {
 		logging.LogErrorf("copy asset [%s] failed: %s", oldPath, err)
 		return
 	}
 
 	if filelock.IsExist(filepath.Join(util.DataDir, oldPath+".sya")) {
 		// Rename the .sya annotation file when renaming a PDF asset https://github.com/siyuan-note/siyuan/issues/9390
-		if err = filelock.Copy(filepath.Join(util.DataDir, oldPath+".sya"), filepath.Join(util.DataDir, newPath+".sya")); nil != err {
+		if err = filelock.Copy(filepath.Join(util.DataDir, oldPath+".sya"), filepath.Join(util.DataDir, newPath+".sya")); err != nil {
 			logging.LogErrorf("copy PDF annotation [%s] failed: %s", oldPath+".sya", err)
 			return
 		}
@@ -607,7 +614,7 @@ func RenameAsset(oldPath, newName string) (newPath string, err error) {
 	oldName := path.Base(oldPath)
 
 	notebooks, err := ListNotebooks()
-	if nil != err {
+	if err != nil {
 		return
 	}
 
@@ -659,12 +666,12 @@ func UnusedAssets() (ret []string) {
 	ret = []string{}
 
 	assetsPathMap, err := allAssetAbsPaths()
-	if nil != err {
+	if err != nil {
 		return
 	}
 	linkDestMap := map[string]bool{}
 	notebooks, err := ListNotebooks()
-	if nil != err {
+	if err != nil {
 		return
 	}
 	luteEngine := util.NewLute()
@@ -815,11 +822,11 @@ func MissingAssets() (ret []string) {
 	ret = []string{}
 
 	assetsPathMap, err := allAssetAbsPaths()
-	if nil != err {
+	if err != nil {
 		return
 	}
 	notebooks, err := ListNotebooks()
-	if nil != err {
+	if err != nil {
 		return
 	}
 	luteEngine := util.NewLute()
@@ -985,6 +992,21 @@ func assetsLinkDestsInTree(tree *parse.Tree) (ret []string) {
 func assetsLinkDestsInNode(node *ast.Node) (ret []string) {
 	ret = []string{}
 	ast.Walk(node, func(n *ast.Node, entering bool) ast.WalkStatus {
+		if n.IsBlock() {
+			// 以 custom-data-assets 开头的块属性值可能是多个资源文件链接，需要计入
+			// Ignore assets associated with the `custom-data-assets` block attribute when cleaning unreferenced assets https://github.com/siyuan-note/siyuan/issues/12574
+			for _, kv := range n.KramdownIAL {
+				k := kv[0]
+				if strings.HasPrefix(k, "custom-data-assets") {
+					dest := kv[1]
+					if "" == dest || !treenode.IsRelativePath([]byte(dest)) {
+						continue
+					}
+					ret = append(ret, dest)
+				}
+			}
+		}
+
 		// 修改以下代码时需要同时修改 database 构造行级元素实现，增加必要的类型
 		if !entering || (ast.NodeLinkDest != n.Type && ast.NodeHTMLBlock != n.Type && ast.NodeInlineHTML != n.Type &&
 			ast.NodeIFrame != n.Type && ast.NodeWidget != n.Type && ast.NodeAudio != n.Type && ast.NodeVideo != n.Type &&
@@ -1050,10 +1072,19 @@ func assetsLinkDestsInNode(node *ast.Node) (ret []string) {
 
 func setAssetsLinkDest(node *ast.Node, oldDest, dest string) {
 	if ast.NodeLinkDest == node.Type {
+		if bytes.HasPrefix(node.Tokens, []byte("//")) {
+			node.Tokens = append([]byte("https:"), node.Tokens...)
+		}
 		node.Tokens = bytes.ReplaceAll(node.Tokens, []byte(oldDest), []byte(dest))
 	} else if node.IsTextMarkType("a") {
+		if strings.HasPrefix(node.TextMarkAHref, "//") {
+			node.TextMarkAHref = "https:" + node.TextMarkAHref
+		}
 		node.TextMarkAHref = strings.ReplaceAll(node.TextMarkAHref, oldDest, dest)
 	} else if ast.NodeAudio == node.Type || ast.NodeVideo == node.Type {
+		if strings.HasPrefix(node.TextMarkAHref, "//") {
+			node.TextMarkAHref = "https:" + node.TextMarkAHref
+		}
 		node.Tokens = bytes.ReplaceAll(node.Tokens, []byte(oldDest), []byte(dest))
 	} else if ast.NodeAttributeView == node.Type {
 		needWrite := false
@@ -1188,7 +1219,7 @@ func getRemoteAssetsLinkDestsInTree(tree *parse.Tree, onlyImg bool) (nodes []*as
 // allAssetAbsPaths 返回 asset 相对路径（assets/xxx）到绝对路径（F:\SiYuan\data\assets\xxx）的映射。
 func allAssetAbsPaths() (assetsAbsPathMap map[string]string, err error) {
 	notebooks, err := ListNotebooks()
-	if nil != err {
+	if err != nil {
 		return
 	}
 
@@ -1305,7 +1336,7 @@ func copyAssetsToDataAssets(rootPath string) {
 
 	dataAssetsPath := filepath.Join(util.DataDir, "assets")
 	for _, assetsDirPath := range assetsDirPaths {
-		if err := filelock.Copy(assetsDirPath, dataAssetsPath); nil != err {
+		if err := filelock.Copy(assetsDirPath, dataAssetsPath); err != nil {
 			logging.LogErrorf("copy tree assets from [%s] to [%s] failed: %s", assetsDirPaths, dataAssetsPath, err)
 		}
 	}

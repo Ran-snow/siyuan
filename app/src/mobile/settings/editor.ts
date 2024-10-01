@@ -15,6 +15,8 @@ const setEditor = (modelMainElement: Element) => {
         (modelMainElement.querySelector("#dynamicLoadBlocks") as HTMLInputElement).value = "1024";
     }
     window.siyuan.config.editor.markdown = {
+        inlineAsterisk: (modelMainElement.querySelector("#editorMarkdownInlineAsterisk") as HTMLInputElement).checked,
+        inlineUnderscore: (modelMainElement.querySelector("#editorMarkdownInlineUnderscore") as HTMLInputElement).checked,
         inlineSup: (modelMainElement.querySelector("#editorMarkdownInlineSup") as HTMLInputElement).checked,
         inlineSub: (modelMainElement.querySelector("#editorMarkdownInlineSub") as HTMLInputElement).checked,
         inlineTag: (modelMainElement.querySelector("#editorMarkdownInlineTag") as HTMLInputElement).checked,
@@ -195,7 +197,7 @@ export const initEditor = () => {
 <div class="b3-label">
     ${window.siyuan.languages.dynamicLoadBlocks}
     <span class="fn__hr"></span>
-    <input class="b3-text-field fn__block" id="dynamicLoadBlocks" type="number" min="48" max="1024" value="${window.siyuan.config.editor.dynamicLoadBlocks}"/>
+    <input class="b3-text-field fn__block" id="dynamicLoadBlocks" type="number" min="48" value="${window.siyuan.config.editor.dynamicLoadBlocks}"/>
     <div class="b3-label__text">${window.siyuan.languages.dynamicLoadBlocksTip}</div>
 </div>
 <div class="b3-label">
@@ -261,6 +263,22 @@ export const initEditor = () => {
     </div>
     <span class="fn__space"></span>
     <input class="b3-switch fn__flex-center" id="allowHTMLBLockScript" type="checkbox"${window.siyuan.config.editor.allowHTMLBLockScript ? " checked" : ""}/>
+</label>
+<label class="fn__flex b3-label">
+    <div class="fn__flex-1">
+       ${window.siyuan.languages.editorMarkdownInlineAsterisk}
+        <div class="b3-label__text">${window.siyuan.languages.editorMarkdownInlineAsteriskTip}</div>
+    </div>
+    <span class="fn__space"></span>
+    <input class="b3-switch fn__flex-center" id="editorMarkdownInlineAsterisk" type="checkbox"${window.siyuan.config.editor.markdown.inlineAsterisk ? " checked" : ""}/>
+</label>
+<label class="fn__flex b3-label">
+    <div class="fn__flex-1">
+       ${window.siyuan.languages.editorMarkdownInlineUnderscore}
+        <div class="b3-label__text">${window.siyuan.languages.editorMarkdownInlineUnderscoreTip}</div>
+    </div>
+    <span class="fn__space"></span>
+    <input class="b3-switch fn__flex-center" id="editorMarkdownInlineUnderscore" type="checkbox"${window.siyuan.config.editor.markdown.inlineUnderscore ? " checked" : ""}/>
 </label>
 <label class="fn__flex b3-label">
     <div class="fn__flex-1">

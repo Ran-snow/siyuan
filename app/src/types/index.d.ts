@@ -60,7 +60,8 @@ type TEventBus = "ws-main" | "sync-start" | "sync-end" | "sync-fail" |
     "open-noneditableblock" |
     "open-menu-blockref" | "open-menu-fileannotationref" | "open-menu-tag" | "open-menu-link" | "open-menu-image" |
     "open-menu-av" | "open-menu-content" | "open-menu-breadcrumbmore" | "open-menu-doctree" | "open-menu-inbox" |
-    "open-siyuan-url-plugin" | "open-siyuan-url-block" |
+    "open-siyuan-url-plugin" | "open-siyuan-url-block" | "opened-notebook" |
+    "closed-notebook" |
     "paste" |
     "input-search" |
     "loaded-protyle" | "loaded-protyle-dynamic" | "loaded-protyle-static" |
@@ -170,6 +171,7 @@ interface Window {
         openExternal(url: string): void
         changeStatusBarColor(color: string, mode: number): void
         writeClipboard(text: string): void
+        writeHTMLClipboard(text: string, html: string): void
         writeImageClipboard(uri: string): void
         readClipboard(): string
         getBlockURL(): string
@@ -190,6 +192,11 @@ interface Window {
     destroyTheme(): Promise<void>
 }
 
+interface filesPath {
+    notebookId: string,
+    openPaths: string[]
+}
+
 interface IPosition {
     x: number,
     y: number,
@@ -202,6 +209,7 @@ interface ISaveLayout {
     name: string,
     layout: IObject
     time: number
+    filesPaths: filesPath[]
 }
 
 interface IWorkspace {
@@ -550,7 +558,7 @@ interface IOpenFileOptions {
     keepCursor?: boolean // file，是否跳转到新 tab 上
     zoomIn?: boolean // 是否缩放
     removeCurrentTab?: boolean // 在当前页签打开时需移除原有页签
-    afterOpen?: () => void // 打开后回调
+    afterOpen?: (model?: import("../layout/Model").Model) => void // 打开后回调
 }
 
 interface ILayoutOptions {
@@ -660,6 +668,7 @@ interface IBlock {
     name?: string;
     memo?: string;
     alias?: string;
+    tag?: string;
     refs?: IBlock[];
     children?: IBlock[]
     length?: number

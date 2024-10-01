@@ -58,7 +58,7 @@ func LoadTrees(ids []string) (ret map[string]*parse.Tree) {
 func LoadTree(boxID, p string, luteEngine *lute.Lute) (ret *parse.Tree, err error) {
 	filePath := filepath.Join(util.DataDir, boxID, p)
 	data, err := filelock.ReadFile(filePath)
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("load tree [%s] failed: %s", p, err)
 		return
 	}
@@ -103,7 +103,7 @@ func LoadTreeByData(data []byte, boxID, p string, luteEngine *lute.Lute) (ret *p
 			if os.IsNotExist(readErr) {
 				// 子文档缺失父文档时自动补全 https://github.com/siyuan-note/siyuan/issues/7376
 				parentTree := treenode.NewTree(boxID, parentPath, hPathBuilder.String()+"Untitled", "Untitled")
-				if writeErr := WriteTree(parentTree); nil != writeErr {
+				if _, writeErr := WriteTree(parentTree); nil != writeErr {
 					logging.LogErrorf("rebuild parent tree [%s] failed: %s", parentAbsPath, writeErr)
 				} else {
 					logging.LogInfof("rebuilt parent tree [%s]", parentAbsPath)
@@ -133,16 +133,18 @@ func LoadTreeByData(data []byte, boxID, p string, luteEngine *lute.Lute) (ret *p
 	return
 }
 
-func WriteTree(tree *parse.Tree) (err error) {
+func WriteTree(tree *parse.Tree) (size uint64, err error) {
 	data, filePath, err := prepareWriteTree(tree)
-	if nil != err {
+	if err != nil {
 		return
 	}
 
-	if err = filelock.WriteFile(filePath, data); nil != err {
+	size = uint64(len(data))
+	if err = filelock.WriteFile(filePath, data); err != nil {
 		msg := fmt.Sprintf("write data [%s] failed: %s", filePath, err)
 		logging.LogErrorf(msg)
-		return errors.New(msg)
+		err = errors.New(msg)
+		return
 	}
 
 	afterWriteTree(tree)
@@ -172,13 +174,13 @@ func prepareWriteTree(tree *parse.Tree) (data []byte, filePath string, err error
 	if !util.UseSingleLineSave {
 		buf := bytes.Buffer{}
 		buf.Grow(1024 * 1024 * 2)
-		if err = json.Indent(&buf, data, "", "\t"); nil != err {
+		if err = json.Indent(&buf, data, "", "\t"); err != nil {
 			return
 		}
 		data = buf.Bytes()
 	}
 
-	if err = os.MkdirAll(filepath.Dir(filePath), 0755); nil != err {
+	if err = os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
 		return
 	}
 	return
@@ -193,7 +195,7 @@ func parseJSON2Tree(boxID, p string, jsonData []byte, luteEngine *lute.Lute) (re
 	var err error
 	var needFix bool
 	ret, needFix, err = ParseJSON(jsonData, luteEngine.ParseOptions)
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("parse json [%s] to tree failed: %s", boxID+p, err)
 		return
 	}
@@ -215,16 +217,16 @@ func parseJSON2Tree(boxID, p string, jsonData []byte, luteEngine *lute.Lute) (re
 		if !util.UseSingleLineSave {
 			buf := bytes.Buffer{}
 			buf.Grow(1024 * 1024 * 2)
-			if err = json.Indent(&buf, data, "", "\t"); nil != err {
+			if err = json.Indent(&buf, data, "", "\t"); err != nil {
 				return
 			}
 			data = buf.Bytes()
 		}
 
-		if err = os.MkdirAll(filepath.Dir(filePath), 0755); nil != err {
+		if err = os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
 			return
 		}
-		if err = filelock.WriteFile(filePath, data); nil != err {
+		if err = filelock.WriteFile(filePath, data); err != nil {
 			msg := fmt.Sprintf("write data [%s] failed: %s", filePath, err)
 			logging.LogErrorf(msg)
 		}
