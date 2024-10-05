@@ -61,6 +61,7 @@ ENTRYPOINT ["/opt/siyuan/kernel"]
 #   -d \
 #   -v /workspace:/siyuan/workspace \
 #   -p 80:6806 \
+#   -e PUID=1001 -e PGID=1002 \
 #   ghcr.io/ran-snow/siyuan \
 #   --workspace=/siyuan/workspace
 
