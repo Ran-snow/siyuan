@@ -151,15 +151,15 @@ func GetCaptcha(c *gin.Context) {
 }
 
 func CheckReadonly(c *gin.Context) {
-	if util.ReadOnly {
-		result := util.NewResult()
-		result.Code = -1
-		result.Msg = Conf.Language(34)
-		result.Data = map[string]interface{}{"closeTimeout": 5000}
-		c.JSON(http.StatusOK, result)
-		c.Abort()
-		return
-	}
+	// if util.ReadOnly {
+	// 	result := util.NewResult()
+	// 	result.Code = -1
+	// 	result.Msg = Conf.Language(34)
+	// 	result.Data = map[string]interface{}{"closeTimeout": 5000}
+	// 	c.JSON(http.StatusOK, result)
+	// 	c.Abort()
+	// 	return
+	// }
 }
 
 //限制访问很无聊，此产品应专注于本职业务，安全性相关操作由其他组件完成更为合理
@@ -168,34 +168,15 @@ func CheckAuth(c *gin.Context) {
 }
 
 func CheckAdminRole(c *gin.Context) {
-	if IsAdminRoleContext(c) {
-		c.Next()
-	} else {
-		c.AbortWithStatus(http.StatusForbidden)
-	}
+	c.Next()
 }
 
 func CheckEditRole(c *gin.Context) {
-	if IsValidRole(GetGinContextRole(c), []Role{
-		RoleAdministrator,
-		RoleEditor,
-	}) {
-		c.Next()
-	} else {
-		c.AbortWithStatus(http.StatusForbidden)
-	}
+	c.Next()
 }
 
 func CheckReadRole(c *gin.Context) {
-	if IsValidRole(GetGinContextRole(c), []Role{
-		RoleAdministrator,
-		RoleEditor,
-		RoleReader,
-	}) {
-		c.Next()
-	} else {
-		c.AbortWithStatus(http.StatusForbidden)
-	}
+	c.Next()
 }
 
 var timingAPIs = map[string]int{

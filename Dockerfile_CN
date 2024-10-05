@@ -63,7 +63,7 @@ ENTRYPOINT ["/opt/siyuan/kernel"]
 #   -p 80:6806 \
 #   -e PUID=1001 -e PGID=1002 \
 #   ghcr.io/ran-snow/siyuan \
-#   --workspace=/siyuan/workspace
+#   --workspace=/siyuan/workspace --readonly=false
 
 # addgroup --gid 1000 siyuan
 # adduser --uid 1000 --ingroup siyuan --disabled-password siyuan
