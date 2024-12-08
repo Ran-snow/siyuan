@@ -40,9 +40,6 @@ const initMultiMenu = (selectItemElements: NodeListOf<Element>, app: App) => {
     if (!fileItemElement) {
         return window.siyuan.menus.menu;
     }
-    window.siyuan.menus.menu.append(movePathToMenu(getTopPaths(
-        Array.from(selectItemElements)
-    )));
     const blockIDs: string[] = [];
     selectItemElements.forEach(item => {
         const id = item.getAttribute("data-node-id");
@@ -50,6 +47,33 @@ const initMultiMenu = (selectItemElements: NodeListOf<Element>, app: App) => {
             blockIDs.push(id);
         }
     });
+
+    if (blockIDs.length > 0) {
+        window.siyuan.menus.menu.append(new MenuItem({
+            id: "copy",
+            label: window.siyuan.languages.copy,
+            type: "submenu",
+            icon: "iconCopy",
+            submenu: copySubMenu(blockIDs).concat([{
+                id: "duplicate",
+                iconHTML: "",
+                label: window.siyuan.languages.duplicate,
+                accelerator: window.siyuan.config.keymap.editor.general.duplicate.custom,
+                click() {
+                    blockIDs.forEach((id) => {
+                        fetchPost("/api/filetree/duplicateDoc", {
+                            id
+                        });
+                    });
+                }
+            }])
+        }).element);
+    }
+
+    window.siyuan.menus.menu.append(movePathToMenu(getTopPaths(
+        Array.from(selectItemElements)
+    )));
+
     if (blockIDs.length > 0) {
         window.siyuan.menus.menu.append(new MenuItem({
             id: "addToDatabase",
@@ -127,6 +151,26 @@ const initMultiMenu = (selectItemElements: NodeListOf<Element>, app: App) => {
         window.siyuan.menus.menu.append(new MenuItem({id: "separator_2", type: "separator"}).element);
     }
     openEditorTab(app, blockIDs);
+    window.siyuan.menus.menu.append(new MenuItem({
+        id: "export",
+        label: window.siyuan.languages.export,
+        type: "submenu",
+        icon: "iconUpload",
+        submenu: [{
+            id: "exportMarkdown",
+            label: "Markdown",
+            icon: "iconMarkdown",
+            click: () => {
+                const msgId = showMessage(window.siyuan.languages.exporting, -1);
+                fetchPost(" /api/export/exportMds", {
+                    ids: blockIDs,
+                }, response => {
+                    hideMessage(msgId);
+                    openByMobile(response.data.zip);
+                });
+            }
+        }]
+    }).element);
     if (app.plugins) {
         emitOpenMenu({
             plugins: app.plugins,
@@ -190,7 +234,7 @@ export const initNavigationMenu = (app: App, liElement: HTMLElement) => {
                 liElement.parentElement.setAttribute("data-sortmode", sort.toString());
                 let files;
                 /// #if MOBILE
-                files = window.siyuan.mobile.files;
+                files = window.siyuan.mobile.docks.file;
                 /// #else
                 files = (getDockByType("file").data["file"] as Files);
                 /// #endif
@@ -335,7 +379,7 @@ export const initNavigationMenu = (app: App, liElement: HTMLElement) => {
             icon: "iconMarkdown",
             click: () => {
                 const msgId = showMessage(window.siyuan.languages.exporting, -1);
-                fetchPost("/api/export/batchExportMd", {
+                fetchPost("/api/export/exportNotebookMd", {
                     notebook: notebookId,
                     path: "/"
                 }, response => {
@@ -449,7 +493,7 @@ export const initFileMenu = (app: App, notebookId: string, pathString: string, l
             label: window.siyuan.languages.copy,
             type: "submenu",
             icon: "iconCopy",
-            submenu: (copySubMenu(id, false) as IMenu[]).concat([{
+            submenu: (copySubMenu([id]) as IMenu[]).concat([{
                 id: "duplicate",
                 iconHTML: "",
                 label: window.siyuan.languages.duplicate,
@@ -671,7 +715,7 @@ export const genImportMenu = (notebookId: string, pathString: string) => {
     const reloadDocTree = () => {
         let files;
         /// #if MOBILE
-        files = window.siyuan.mobile.files;
+        files = window.siyuan.mobile.docks.file;
         /// #else
         files = (getDockByType("file").data["file"] as Files);
         /// #endif

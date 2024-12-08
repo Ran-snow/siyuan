@@ -277,8 +277,12 @@ func removeAttributeViewKey(c *gin.Context) {
 
 	avID := arg["avID"].(string)
 	keyID := arg["keyID"].(string)
+	removeRelationDest := false
+	if nil != arg["removeRelationDest"] {
+		removeRelationDest = arg["removeRelationDest"].(bool)
+	}
 
-	err := model.RemoveAttributeViewKey(avID, keyID)
+	err := model.RemoveAttributeViewKey(avID, keyID, removeRelationDest)
 	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
@@ -556,12 +560,19 @@ func renderAttributeView(c *gin.Context) {
 
 	var views []map[string]interface{}
 	for _, v := range attrView.Views {
+		pSize := 10
+		if nil != v.Table && av.LayoutTypeTable == v.LayoutType {
+			pSize = v.Table.PageSize
+		}
+
 		view := map[string]interface{}{
 			"id":               v.ID,
 			"icon":             v.Icon,
 			"name":             v.Name,
+			"desc":             v.Desc,
 			"hideAttrViewName": v.HideAttrViewName,
 			"type":             v.LayoutType,
+			"pageSize":         pSize,
 		}
 
 		views = append(views, view)
@@ -604,9 +615,8 @@ func setAttributeViewBlockAttr(c *gin.Context) {
 	avID := arg["avID"].(string)
 	keyID := arg["keyID"].(string)
 	rowID := arg["rowID"].(string)
-	cellID := arg["cellID"].(string)
 	value := arg["value"].(interface{})
-	updatedVal, err := model.UpdateAttributeViewCell(nil, avID, keyID, rowID, cellID, value)
+	updatedVal, err := model.UpdateAttributeViewCell(nil, avID, keyID, rowID, value)
 	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()

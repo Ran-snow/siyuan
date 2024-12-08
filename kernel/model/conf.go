@@ -134,7 +134,7 @@ func InitConf() {
 
 	if "" != util.Lang {
 		initialized := false
-		if util.ContainerAndroid == util.Container || util.ContainerIOS == util.Container {
+		if util.ContainerAndroid == util.Container || util.ContainerIOS == util.Container || util.ContainerHarmony == util.Container {
 			// 移动端以上次设置的外观语言为准
 			if "" != Conf.Lang && util.Lang != Conf.Lang {
 				util.Lang = Conf.Lang
@@ -307,6 +307,10 @@ func InitConf() {
 		Conf.System.ID = util.GetDeviceID()
 		Conf.System.Name = util.GetDeviceName()
 	}
+	Conf.System.DisabledFeatures = util.DisabledFeatures
+	if 1 > len(Conf.System.DisabledFeatures) {
+		Conf.System.DisabledFeatures = []string{}
+	}
 
 	if nil == Conf.Snippet {
 		Conf.Snippet = conf.NewSnpt()
@@ -339,15 +343,17 @@ func InitConf() {
 		Conf.Sync.Mode = 1
 	}
 	if nil == Conf.Sync.S3 {
-		Conf.Sync.S3 = &conf.S3{}
+		Conf.Sync.S3 = &conf.S3{PathStyle: true, SkipTlsVerify: true}
 	}
 	Conf.Sync.S3.Endpoint = util.NormalizeEndpoint(Conf.Sync.S3.Endpoint)
 	Conf.Sync.S3.Timeout = util.NormalizeTimeout(Conf.Sync.S3.Timeout)
+	Conf.Sync.S3.ConcurrentReqs = util.NormalizeConcurrentReqs(Conf.Sync.S3.ConcurrentReqs, conf.ProviderS3)
 	if nil == Conf.Sync.WebDAV {
-		Conf.Sync.WebDAV = &conf.WebDAV{}
+		Conf.Sync.WebDAV = &conf.WebDAV{SkipTlsVerify: true}
 	}
 	Conf.Sync.WebDAV.Endpoint = util.NormalizeEndpoint(Conf.Sync.WebDAV.Endpoint)
 	Conf.Sync.WebDAV.Timeout = util.NormalizeTimeout(Conf.Sync.WebDAV.Timeout)
+	Conf.Sync.WebDAV.ConcurrentReqs = util.NormalizeConcurrentReqs(Conf.Sync.WebDAV.ConcurrentReqs, conf.ProviderWebDAV)
 	if util.ContainerDocker == util.Container {
 		Conf.Sync.Perception = false
 	}
@@ -378,6 +384,12 @@ func InitConf() {
 	}
 	if 12000 > Conf.Repo.SyncIndexTiming {
 		Conf.Repo.SyncIndexTiming = 12 * 1000
+	}
+	if 1 > Conf.Repo.IndexRetentionDays {
+		Conf.Repo.IndexRetentionDays = 180
+	}
+	if 1 > Conf.Repo.RetentionIndexesDaily {
+		Conf.Repo.RetentionIndexesDaily = 2
 	}
 
 	if nil == Conf.Search {
@@ -473,7 +485,7 @@ func InitConf() {
 		// 上次未正常完成数据索引
 		go func() {
 			util.WaitForUILoaded()
-			if util.ContainerIOS == util.Container || util.ContainerAndroid == util.Container {
+			if util.ContainerIOS == util.Container || util.ContainerAndroid == util.Container || util.ContainerHarmony == util.Container {
 				task.AppendAsyncTaskWithDelay(task.PushMsg, 2*time.Second, util.PushMsg, Conf.language(245), 15000)
 			} else {
 				task.AppendAsyncTaskWithDelay(task.PushMsg, 2*time.Second, util.PushMsg, Conf.language(244), 15000)
@@ -595,7 +607,7 @@ func Close(force, setCurrentWorkspace bool, execInstallPkg int) (exitCode int) {
 
 	logging.LogInfof("exiting kernel [force=%v, setCurrentWorkspace=%v, execInstallPkg=%d]", force, setCurrentWorkspace, execInstallPkg)
 	util.PushMsg(Conf.Language(95), 10000*60)
-	WaitForWritingFiles()
+	FlushTxQueue()
 
 	if !force {
 		if Conf.Sync.Enabled && 3 != Conf.Sync.Mode &&
@@ -612,7 +624,7 @@ func Close(force, setCurrentWorkspace bool, execInstallPkg int) (exitCode int) {
 	closeUserGuide()
 
 	// Improve indexing completeness when exiting https://github.com/siyuan-note/siyuan/issues/12039
-	sql.WaitForWritingDatabaseIn(200 * time.Millisecond)
+	sql.FlushQueue()
 
 	util.IsExiting.Store(true)
 	waitSecondForExecInstallPkg := false

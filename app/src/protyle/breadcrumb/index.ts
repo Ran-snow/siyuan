@@ -8,7 +8,7 @@ import {setEditMode} from "../util/setEditMode";
 import {RecordMedia} from "../util/RecordMedia";
 import {hideMessage, showMessage} from "../../dialog/message";
 import {uploadFiles} from "../upload";
-import {hasClosestBlock, hasClosestByAttribute} from "../util/hasClosest";
+import {hasClosestBlock, hasClosestByAttribute, hasTopClosestByClassName} from "../util/hasClosest";
 import {needSubscribe} from "../../util/needSubscribe";
 import {isMobile} from "../../util/functions";
 import {zoomOut} from "../../menus/protyle";
@@ -28,9 +28,10 @@ import {Menu} from "../../plugin/Menu";
 import {getNoContainerElement} from "../wysiwyg/getBlock";
 import {openTitleMenu} from "../header/openTitleMenu";
 import {emitOpenMenu} from "../../plugin/EventBus";
-import {isInAndroid, isIPad, isMac, updateHotkeyTip} from "../util/compatibility";
+import {isInAndroid, isInHarmony, isIPad, isMac, updateHotkeyTip} from "../util/compatibility";
 import {resize} from "../util/resize";
 import {listIndent, listOutdent} from "../wysiwyg/list";
+import {improveBreadcrumbAppearance} from "../wysiwyg/renderBacklink";
 
 export class Breadcrumb {
     public element: HTMLElement;
@@ -43,7 +44,7 @@ export class Breadcrumb {
         element.className = "protyle-breadcrumb";
         let padHTML = "";
         /// #if BROWSER && !MOBILE
-        if (isIPad() || isInAndroid()) {
+        if (isIPad() || isInAndroid() || isInHarmony()) {
             padHTML = `<button class="block__icon fn__flex-center ariaLabel" disabled aria-label="${window.siyuan.languages.undo}" data-type="undo"><svg><use xlink:href="#iconUndo"></use></svg></button>
 <button class="block__icon fn__flex-center ariaLabel" disabled aria-label="${window.siyuan.languages.redo}" data-type="redo"><svg><use xlink:href="#iconRedo"></use></svg></button>
 <button class="block__icon fn__flex-center ariaLabel" disabled aria-label="${window.siyuan.languages.outdent}" data-type="outdent"><svg><use xlink:href="#iconOutdent"></use></svg></button>
@@ -294,7 +295,7 @@ ${padHTML}
                     window.siyuan.menus.menu.remove();
                 });
                 window.siyuan.menus.menu.append(uploadMenu);
-                if (!isInAndroid()) {
+                if (!isInAndroid() && !isInHarmony()) {
                     window.siyuan.menus.menu.append(new MenuItem({
                         id: this.mediaRecorder?.isRecording ? "endRecord" : "startRecord",
                         current: this.mediaRecorder && this.mediaRecorder.isRecording,
@@ -575,13 +576,15 @@ ${padHTML}
                 iconHTML: "",
                 type: "readonly",
                 // 不能换行，否则移动端间距过大
-                label: `<div class="fn__flex">${window.siyuan.languages.runeCount}<span class="fn__space fn__flex-1"></span>${response.data.runeCount}</div><div class="fn__flex">${window.siyuan.languages.wordCount}<span class="fn__space fn__flex-1"></span>${response.data.wordCount}</div><div class="fn__flex">${window.siyuan.languages.linkCount}<span class="fn__space fn__flex-1"></span>${response.data.linkCount}</div><div class="fn__flex">${window.siyuan.languages.imgCount}<span class="fn__space fn__flex-1"></span>${response.data.imageCount}</div><div class="fn__flex">${window.siyuan.languages.refCount}<span class="fn__space fn__flex-1"></span>${response.data.refCount}</div>`,
+                label: `<div class="fn__flex">${window.siyuan.languages.runeCount}<span class="fn__space fn__flex-1"></span>${response.data.runeCount}</div><div class="fn__flex">${window.siyuan.languages.wordCount}<span class="fn__space fn__flex-1"></span>${response.data.wordCount}</div><div class="fn__flex">${window.siyuan.languages.linkCount}<span class="fn__space fn__flex-1"></span>${response.data.linkCount}</div><div class="fn__flex">${window.siyuan.languages.imgCount}<span class="fn__space fn__flex-1"></span>${response.data.imageCount}</div><div class="fn__flex">${window.siyuan.languages.refCount}<span class="fn__space fn__flex-1"></span>${response.data.refCount}</div><div class="fn__flex">${window.siyuan.languages.blockCount}<span class="fn__space fn__flex-1"></span>${response.data.blockCount}</div>`,
             }).element);
             /// #if MOBILE
             window.siyuan.menus.menu.fullscreen();
             /// #else
             window.siyuan.menus.menu.popup(position);
             /// #endif
+            const popoverElement = hasTopClosestByClassName(protyle.element, "block__popover", true);
+            window.siyuan.menus.menu.element.setAttribute("data-from", popoverElement ? popoverElement.dataset.level + "popover" : "app");
         });
     }
 
@@ -649,30 +652,8 @@ ${padHTML}
                     html += '<svg class="protyle-breadcrumb__arrow"><use xlink:href="#iconRight"></use></svg>';
                 }
             });
-            this.element.classList.remove("protyle-breadcrumb__bar--nowrap");
             this.element.innerHTML = html;
-            const itemElements = Array.from(this.element.querySelectorAll(".protyle-breadcrumb__text"));
-            if (itemElements.length === 0) {
-                return;
-            }
-            let jump = false;
-            while (this.element.scrollHeight > 30 && !jump && itemElements.length > 1) {
-                itemElements.find((item, index) => {
-                    if (index > 0) {
-                        if (!item.classList.contains("protyle-breadcrumb__text--ellipsis")) {
-                            item.classList.add("protyle-breadcrumb__text--ellipsis");
-                            return true;
-                        }
-                        if (index === itemElements.length - 1 && item.classList.contains("protyle-breadcrumb__text--ellipsis")) {
-                            jump = true;
-                        }
-                    }
-                });
-            }
-            this.element.classList.add("protyle-breadcrumb__bar--nowrap");
-            if (this.element.lastElementChild) {
-                this.element.scrollLeft = (this.element.lastElementChild as HTMLElement).offsetLeft - this.element.clientWidth + 14;
-            }
+            improveBreadcrumbAppearance(this.element.parentElement);
         });
         /// #endif
     }

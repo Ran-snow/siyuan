@@ -3,15 +3,17 @@ import {
     hasClosestByClassName,
     hasClosestByMatchTag,
     hasClosestByTag,
-    hasTopClosestByClassName, isInEmbedBlock
+    hasTopClosestByClassName,
+    isInEmbedBlock
 } from "../util/hasClosest";
 import {getIconByType} from "../../editor/getIcon";
 import {enterBack, iframeMenu, setFold, tableMenu, videoMenu, zoomOut} from "../../menus/protyle";
 import {MenuItem} from "../../menus/Menu";
-import {copySubMenu, openAttr, openWechatNotify} from "../../menus/commonMenuItem";
+import {copySubMenu, openAttr, openFileAttr, openWechatNotify} from "../../menus/commonMenuItem";
 import {
     copyPlainText,
     isInAndroid,
+    isInHarmony,
     isMac,
     isOnlyMeta,
     openByMobile,
@@ -21,7 +23,8 @@ import {
 import {
     transaction,
     turnsIntoOneTransaction,
-    turnsIntoTransaction, turnsOneInto,
+    turnsIntoTransaction,
+    turnsOneInto,
     updateBatchTransaction,
     updateTransaction
 } from "../wysiwyg/transaction";
@@ -33,13 +36,7 @@ import {blockRender} from "../render/blockRender";
 import {getContenteditableElement, getTopAloneElement, isNotEditBlock} from "../wysiwyg/getBlock";
 import * as dayjs from "dayjs";
 import {fetchPost} from "../../util/fetch";
-import {
-    cancelSB,
-    genEmptyElement,
-    getLangByType,
-    insertEmptyBlock,
-    jumpToParent,
-} from "../../block/util";
+import {cancelSB, genEmptyElement, getLangByType, insertEmptyBlock, jumpToParent,} from "../../block/util";
 import {countBlockWord} from "../../layout/status";
 import {Constants} from "../../constants";
 import {mathRender} from "../render/mathRender";
@@ -60,6 +57,11 @@ import {avContextmenu, duplicateCompletely} from "../render/av/action";
 import {getPlainText} from "../util/paste";
 import {addEditorToDatabase} from "../render/av/addToDatabase";
 import {processClonePHElement} from "../render/util";
+/// #if !MOBILE
+import {openFileById} from "../../editor/util";
+/// #endif
+import {checkFold} from "../../util/noRelyPCFunction";
+import {copyTextByType} from "../toolbar/util";
 
 export class Gutter {
     public element: HTMLElement;
@@ -67,12 +69,15 @@ export class Gutter {
 
     constructor(protyle: IProtyle) {
         if (isMac()) {
-            this.gutterTip = window.siyuan.languages.gutterTip;
+            this.gutterTip = window.siyuan.languages.gutterTip.replace("⌥→", updateHotkeyTip(window.siyuan.config.keymap.general.enter.custom));
         } else {
             this.gutterTip = window.siyuan.languages.gutterTip.replace("⌥→", updateHotkeyTip(window.siyuan.config.keymap.general.enter.custom))
                 .replace("⌘↑", updateHotkeyTip(window.siyuan.config.keymap.editor.general.collapse.custom))
                 .replace("⌥⌘A", updateHotkeyTip(window.siyuan.config.keymap.editor.general.attr.custom))
                 .replace(/⌘/g, "Ctrl+").replace(/⌥/g, "Alt+").replace(/⇧/g, "Shift+").replace(/⌃/g, "Ctrl+");
+        }
+        if (protyle.options.backlinkData) {
+            this.gutterTip = this.gutterTip.replace(window.siyuan.languages.enter, window.siyuan.languages.openBy);
         }
         this.element = document.createElement("div");
         this.element.className = "protyle-gutters";
@@ -285,6 +290,15 @@ export class Gutter {
                     }
                     blockElement.setAttribute("updated", newUpdated);
                 } else {
+                    if (!protyle.disabled && event.shiftKey) {
+                        const blockId = rowElement.querySelector('[data-dtype="block"] .av__celltext--ref')?.getAttribute("data-id");
+                        if (blockId) {
+                            fetchPost("/api/attr/getBlockAttrs", {id: blockId}, (response) => {
+                                openFileAttr(response.data, "av", protyle);
+                            });
+                            return;
+                        }
+                    }
                     avContextmenu(protyle, rowElement as HTMLElement, {
                         x: gutterRect.left,
                         y: gutterRect.bottom,
@@ -296,7 +310,18 @@ export class Gutter {
                 return;
             }
             if (isOnlyMeta(event)) {
-                zoomOut({protyle, id});
+                if (protyle.options.backlinkData) {
+                    checkFold(id, (zoomIn, action) => {
+                        openFileById({
+                            app: protyle.app,
+                            id,
+                            action,
+                            zoomIn
+                        });
+                    });
+                } else {
+                    zoomOut({protyle, id});
+                }
             } else if (event.altKey) {
                 let foldElement: Element;
                 Array.from(protyle.wysiwyg.element.querySelectorAll(`[data-node-id="${id}"]`)).find(item => {
@@ -436,6 +461,12 @@ export class Gutter {
             });
             event.preventDefault();
             event.stopPropagation();
+        });
+        // https://github.com/siyuan-note/siyuan/issues/12751
+        this.element.addEventListener("mousewheel", (event) => {
+            hideElements(["gutter"], protyle);
+            event.stopPropagation();
+            event.preventDefault();
         });
     }
 
@@ -712,20 +743,7 @@ export class Gutter {
                 }
             }).element);
         }
-        const copyMenu: IMenu[] = [{
-            id: "copy",
-            iconHTML: "",
-            label: window.siyuan.languages.copy,
-            accelerator: "⌘C",
-            click() {
-                if (isNotEditBlock(selectsElement[0])) {
-                    focusBlock(selectsElement[0]);
-                } else {
-                    focusByRange(getEditorRange(selectsElement[0]));
-                }
-                document.execCommand("copy");
-            }
-        }, {
+        const copyMenu: IMenu[] = (copySubMenu(Array.from(selectsElement).map(item => item.getAttribute("data-node-id")), true, selectsElement[0]) as IMenu[]).concat([{
             id: "copyPlainText",
             iconHTML: "",
             label: window.siyuan.languages.copyPlainText,
@@ -739,6 +757,19 @@ export class Gutter {
                 focusBlock(selectsElement[0]);
             }
         }, {
+            id: "copy",
+            iconHTML: "",
+            label: window.siyuan.languages.copy,
+            accelerator: "⌘C",
+            click() {
+                if (isNotEditBlock(selectsElement[0])) {
+                    focusBlock(selectsElement[0]);
+                } else {
+                    focusByRange(getEditorRange(selectsElement[0]));
+                }
+                document.execCommand("copy");
+            }
+        }, {
             id: "duplicate",
             iconHTML: "",
             label: window.siyuan.languages.duplicate,
@@ -747,10 +778,20 @@ export class Gutter {
             click() {
                 duplicateBlock(selectsElement, protyle);
             }
-        }];
+        }]);
+        copyMenu.splice(4, 1, {
+            id: "copyHPath",
+            iconHTML: "",
+            label: window.siyuan.languages.copyHPath,
+            accelerator: window.siyuan.config.keymap.editor.general.copyHPath.custom,
+            click: () => {
+                copyTextByType([selectsElement[0].getAttribute("data-node-id")], "hPath");
+                focusBlock(selectsElement[0]);
+            }
+        });
         const copyTextRefMenu = this.genCopyTextRef(selectsElement);
         if (copyTextRefMenu) {
-            copyMenu.splice(2, 0, copyTextRefMenu);
+            copyMenu.splice(7, 0, copyTextRefMenu);
         }
         window.siyuan.menus.menu.append(new MenuItem({
             id: "copy",
@@ -1227,7 +1268,7 @@ export class Gutter {
             }).element);
         }
 
-        const copyMenu = (copySubMenu(id, true, nodeElement) as IMenu[]).concat([{
+        const copyMenu = (copySubMenu([id], true, nodeElement) as IMenu[]).concat([{
             id: "copyPlainText",
             iconHTML: "",
             label: window.siyuan.languages.copyPlainText,
@@ -1614,6 +1655,8 @@ export class Gutter {
                     fetchPost("/api/block/getHeadingChildrenDOM", {id}, (response) => {
                         if (isInAndroid()) {
                             window.JSAndroid.writeHTMLClipboard(protyle.lute.BlockDOM2StdMd(response.data).trimEnd(), response.data + Constants.ZWSP);
+                        } else if (isInHarmony()) {
+                            window.JSHarmony.writeHTMLClipboard(protyle.lute.BlockDOM2StdMd(response.data).trimEnd(), response.data + Constants.ZWSP);
                         } else {
                             writeText(response.data + Constants.ZWSP);
                         }
@@ -1628,6 +1671,8 @@ export class Gutter {
                     fetchPost("/api/block/getHeadingChildrenDOM", {id}, (response) => {
                         if (isInAndroid()) {
                             window.JSAndroid.writeHTMLClipboard(protyle.lute.BlockDOM2StdMd(response.data).trimEnd(), response.data + Constants.ZWSP);
+                        } else if (isInHarmony()) {
+                            window.JSHarmony.writeHTMLClipboard(protyle.lute.BlockDOM2StdMd(response.data).trimEnd(), response.data + Constants.ZWSP);
                         } else {
                             writeText(response.data + Constants.ZWSP);
                         }
@@ -1680,6 +1725,24 @@ export class Gutter {
                     enterBack(protyle, id);
                 }
             }).element);
+        } else {
+            /// #if !MOBILE
+            window.siyuan.menus.menu.append(new MenuItem({
+                id: "enter",
+                accelerator: `${updateHotkeyTip(window.siyuan.config.keymap.general.enter.custom)}/${updateHotkeyTip("⌘" + window.siyuan.languages.click)}`,
+                label: window.siyuan.languages.openBy,
+                click: () => {
+                    checkFold(id, (zoomIn, action) => {
+                        openFileById({
+                            app: protyle.app,
+                            id,
+                            action,
+                            zoomIn
+                        });
+                    });
+                }
+            }).element);
+            /// #endif
         }
         if (!protyle.disabled) {
             window.siyuan.menus.menu.append(new MenuItem({
@@ -2226,7 +2289,13 @@ export class Gutter {
                     const rowElement = hasClosestByClassName(target, "av__row");
                     if (rowElement && !rowElement.classList.contains("av__row--header")) {
                         element = rowElement;
-                        html = `<button data-type="NodeAttributeViewRowMenu" data-node-id="${dataNodeId}" data-row-id="${rowElement.dataset.id}" class="ariaLabel" data-position="right" aria-label="${window.siyuan.languages.rowTip}"><svg><use xlink:href="#iconDrag"></use></svg><span ${protyle.disabled ? "" : 'draggable="true" class="fn__grab"'}></span></button>`;
+                        let iconAriaLabel = isMac() ? window.siyuan.languages.rowTip : window.siyuan.languages.rowTip.replace("⇧", "Shift+");
+                        if (protyle.disabled) {
+                            iconAriaLabel = window.siyuan.languages.rowTip.substring(0, window.siyuan.languages.rowTip.indexOf("<br"));
+                        } else if (rowElement.querySelector('[data-dtype="block"]')?.getAttribute("data-detached") === "true") {
+                            iconAriaLabel = window.siyuan.languages.rowTip.substring(0, window.siyuan.languages.rowTip.lastIndexOf("<br"));
+                        }
+                        html = `<button data-type="NodeAttributeViewRowMenu" data-node-id="${dataNodeId}" data-row-id="${rowElement.dataset.id}" class="ariaLabel" data-position="right" aria-label="${iconAriaLabel}"><svg><use xlink:href="#iconDrag"></use></svg><span ${protyle.disabled ? "" : 'draggable="true" class="fn__grab"'}></span></button>`;
                         if (!protyle.disabled) {
                             html = `<button data-type="NodeAttributeViewRow" data-node-id="${dataNodeId}" data-row-id="${rowElement.dataset.id}" class="ariaLabel" data-position="right" aria-label="${isMac() ? window.siyuan.languages.addBelowAbove : window.siyuan.languages.addBelowAbove.replace("⌥", "Alt+")}"><svg><use xlink:href="#iconAdd"></use></svg></button>${html}`;
                         }
@@ -2255,7 +2324,11 @@ export class Gutter {
                     html = "";
                 }
                 index += 1;
-                const buttonHTML = `<button class="ariaLabel" data-position="right" aria-label="${this.gutterTip}" 
+                let gutterTip = this.gutterTip;
+                if (protyle.disabled) {
+                    gutterTip = this.gutterTip.split("<br>").splice(0, 2).join("<br>");
+                }
+                const buttonHTML = `<button class="ariaLabel" data-position="right" aria-label="${gutterTip}" 
 data-type="${type}" data-subtype="${nodeElement.getAttribute("data-subtype")}" data-node-id="${nodeElement.getAttribute("data-node-id")}">
     <svg><use xlink:href="#${getIconByType(type, nodeElement.getAttribute("data-subtype"))}"></use></svg>
     <span ${protyle.disabled ? "" : 'draggable="true"'}></span>
@@ -2267,7 +2340,7 @@ data-type="${type}" data-subtype="${nodeElement.getAttribute("data-subtype")}" d
                 if (type === "NodeListItem" && nodeElement.childElementCount > 3 || type === "NodeHeading") {
                     const fold = nodeElement.getAttribute("fold");
                     foldHTML = `<button class="ariaLabel" data-position="right" aria-label="${window.siyuan.languages.fold}" 
-data-type="fold" style="cursor:inherit;"><svg style="width:10px${fold && fold === "1" ? "" : ";transform:rotate(90deg)"}"><use xlink:href="#iconPlay"></use></svg></button>`;
+data-type="fold" style="cursor:inherit;"><svg style="width: 10px${fold && fold === "1" ? "" : ";transform:rotate(90deg)"}"><use xlink:href="#iconPlay"></use></svg></button>`;
                 }
                 if (type === "NodeListItem" || type === "NodeList") {
                     listItem = nodeElement;

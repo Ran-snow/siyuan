@@ -828,13 +828,13 @@ func buildBlockFromNode(n *ast.Node, tree *parse.Tree) (block *Block, attributes
 		if !treenode.IsNodeOCRed(n) {
 			util.PushNodeOCRQueue(n)
 		}
-		content = NodeStaticContent(n, nil, true, indexAssetPath, true, nil)
+		content = NodeStaticContent(n, nil, true, indexAssetPath, true)
 
 		fc := treenode.FirstLeafBlock(n)
 		if !treenode.IsNodeOCRed(fc) {
 			util.PushNodeOCRQueue(fc)
 		}
-		fcontent = NodeStaticContent(fc, nil, true, false, true, nil)
+		fcontent = NodeStaticContent(fc, nil, true, false, true)
 
 		parentID = n.Parent.ID
 		if h := heading(n); nil != h { // 如果在标题块下方，则将标题块作为父节点
@@ -846,7 +846,7 @@ func buildBlockFromNode(n *ast.Node, tree *parse.Tree) (block *Block, attributes
 		if !treenode.IsNodeOCRed(n) {
 			util.PushNodeOCRQueue(n)
 		}
-		content = NodeStaticContent(n, nil, true, indexAssetPath, true, nil)
+		content = NodeStaticContent(n, nil, true, indexAssetPath, true)
 
 		parentID = n.Parent.ID
 		if h := heading(n); nil != h {
@@ -1316,6 +1316,9 @@ func queryRow(query string, args ...interface{}) *sql.Row {
 		logging.LogErrorf("statement is empty")
 		return nil
 	}
+	if nil == db {
+		return nil
+	}
 	return db.QueryRow(query, args...)
 }
 
@@ -1323,6 +1326,9 @@ func query(query string, args ...interface{}) (*sql.Rows, error) {
 	query = strings.TrimSpace(query)
 	if "" == query {
 		return nil, errors.New("statement is empty")
+	}
+	if nil == db {
+		return nil, errors.New("database is nil")
 	}
 	return db.Query(query, args...)
 }
@@ -1422,8 +1428,6 @@ func execStmtTx(tx *sql.Tx, stmt string, args ...interface{}) (err error) {
 func nSort(n *ast.Node) int {
 	switch n.Type {
 	// 以下为块级元素
-	case ast.NodeDocument:
-		return 0
 	case ast.NodeHeading:
 		return 5
 	case ast.NodeParagraph:
@@ -1446,6 +1450,8 @@ func nSort(n *ast.Node) int {
 		return 30
 	case ast.NodeAttributeView:
 		return 30
+	case ast.NodeDocument:
+		return 0
 	case ast.NodeText, ast.NodeTextMark:
 		if n.IsTextMarkType("tag") {
 			return 205

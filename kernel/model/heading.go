@@ -195,7 +195,7 @@ func Doc2Heading(srcID, targetID string, after bool) (srcTreeBox, srcTreePath st
 	if "" != tagIAL && 0 < len(tags) {
 		// 带标签的文档块转换为标题块时将标签移动到标题块下方 https://github.com/siyuan-note/siyuan/issues/6550
 
-		tagPara := treenode.NewParagraph()
+		tagPara := treenode.NewParagraph("")
 		for i, tag := range tags {
 			if "" == tag {
 				continue
@@ -273,7 +273,7 @@ func Doc2Heading(srcID, targetID string, after bool) (srcTreeBox, srcTreePath st
 	return
 }
 
-func Heading2Doc(srcHeadingID, targetBoxID, targetPath string) (srcRootBlockID, newTargetPath string, err error) {
+func Heading2Doc(srcHeadingID, targetBoxID, targetPath, previousPath string) (srcRootBlockID, newTargetPath string, err error) {
 	srcTree, _ := LoadTreeByBlockID(srcHeadingID)
 	if nil == srcTree {
 		err = ErrBlockNotFound
@@ -296,7 +296,7 @@ func Heading2Doc(srcHeadingID, targetBoxID, targetPath string) (srcRootBlockID, 
 	}
 
 	box := Conf.Box(targetBoxID)
-	headingText := getNodeRefText0(headingNode)
+	headingText := getNodeRefText0(headingNode, Conf.Editor.BlockRefDynamicAnchorTextMaxLen)
 	if strings.Contains(headingText, "/") {
 		headingText = strings.ReplaceAll(headingText, "/", "_")
 		util.PushMsg(Conf.language(246), 7000)
@@ -305,15 +305,33 @@ func Heading2Doc(srcHeadingID, targetBoxID, targetPath string) (srcRootBlockID, 
 	moveToRoot := "/" == targetPath
 	toHP := path.Join("/", headingText)
 	toFolder := "/"
-
-	if !moveToRoot {
-		toBlock := treenode.GetBlockTreeRootByPath(targetBoxID, targetPath)
-		if nil == toBlock {
+	if "" != previousPath {
+		previousDoc := treenode.GetBlockTreeRootByPath(targetBoxID, previousPath)
+		if nil == previousDoc {
 			err = ErrBlockNotFound
 			return
 		}
-		toHP = path.Join(toBlock.HPath, headingText)
-		toFolder = path.Join(path.Dir(targetPath), toBlock.ID)
+		parentPath := path.Dir(previousPath)
+		if "/" != parentPath {
+			parentPath = strings.TrimSuffix(parentPath, "/") + ".sy"
+			parentDoc := treenode.GetBlockTreeRootByPath(targetBoxID, parentPath)
+			if nil == parentDoc {
+				err = ErrBlockNotFound
+				return
+			}
+			toHP = path.Join(parentDoc.HPath, headingText)
+			toFolder = path.Join(path.Dir(parentPath), parentDoc.ID)
+		}
+	} else {
+		if !moveToRoot {
+			parentDoc := treenode.GetBlockTreeRootByPath(targetBoxID, targetPath)
+			if nil == parentDoc {
+				err = ErrBlockNotFound
+				return
+			}
+			toHP = path.Join(parentDoc.HPath, headingText)
+			toFolder = path.Join(path.Dir(targetPath), parentDoc.ID)
+		}
 	}
 
 	newTargetPath = path.Join(toFolder, srcHeadingID+".sy")
@@ -365,7 +383,7 @@ func Heading2Doc(srcHeadingID, targetBoxID, targetPath string) (srcRootBlockID, 
 	headingNode.Unlink()
 	srcTree.Root.SetIALAttr("updated", util.CurrentTimeSecondsStr())
 	if nil == srcTree.Root.FirstChild {
-		srcTree.Root.AppendChild(treenode.NewParagraph())
+		srcTree.Root.AppendChild(treenode.NewParagraph(""))
 	}
 	treenode.RemoveBlockTreesByRootID(srcTree.ID)
 	if err = indexWriteTreeUpsertQueue(srcTree); err != nil {
@@ -375,7 +393,11 @@ func Heading2Doc(srcHeadingID, targetBoxID, targetPath string) (srcRootBlockID, 
 	newTree.Box, newTree.Path = targetBoxID, newTargetPath
 	newTree.Root.SetIALAttr("updated", util.CurrentTimeSecondsStr())
 	newTree.Root.Spec = "1"
-	box.addMinSort(path.Dir(newTargetPath), newTree.ID)
+	if "" != previousPath {
+		box.addSort(previousPath, newTree.ID)
+	} else {
+		box.addMinSort(path.Dir(newTargetPath), newTree.ID)
+	}
 	if err = indexWriteTreeUpsertQueue(newTree); err != nil {
 		return "", "", err
 	}

@@ -25,17 +25,14 @@ export const initBlockPopover = (app: App) => {
             hasClosestByClassName(event.target, "av__calc--ashow") ||
             hasClosestByClassName(event.target, "av__cell");
         if (aElement) {
-            let tip = aElement.getAttribute("aria-label") || aElement.getAttribute("data-inline-memo-content");
+            let tooltipClass = "";
+            let tip = aElement.getAttribute("aria-label");
             if (aElement.classList.contains("av__cell")) {
-                if (aElement.classList.contains("av__cell--header")) {
-                    const textElement = aElement.querySelector(".av__celltext");
-                    if (textElement.scrollWidth > textElement.clientWidth + 2) {
-                        tip = getCellText(aElement);
-                    }
-                } else {
+                if (!aElement.classList.contains("av__cell--header")) {
                     if (aElement.firstElementChild?.getAttribute("data-type") === "url") {
                         if (aElement.firstElementChild.textContent.indexOf("...") > -1) {
                             tip = Lute.EscapeHTMLStr(aElement.firstElementChild.getAttribute("data-href"));
+                            tooltipClass = "href";
                         }
                     }
                     if (!tip && aElement.dataset.wrap !== "true" && event.target.dataset.type !== "block-more" && !hasClosestByClassName(event.target, "block__icon")) {
@@ -47,15 +44,23 @@ export const initBlockPopover = (app: App) => {
                     }
                 }
             } else if (aElement.classList.contains("av__celltext--url")) {
-                tip = tip ? `<span style="word-break: break-all">${tip.substring(0, Constants.SIZE_TITLE)}</span><br>${aElement.getAttribute("data-name")}` : aElement.getAttribute("data-name");
+                tip = tip ? `<span style="word-break: break-all">${tip.substring(0, Constants.SIZE_TITLE)}</span><div class="fn__hr"></div>${aElement.getAttribute("data-name")}` : aElement.getAttribute("data-name");
+                tooltipClass = "href";
             } else if (aElement.classList.contains("av__calc--ashow") && aElement.clientWidth + 2 < aElement.scrollWidth) {
                 tip = aElement.lastChild.textContent + " " + aElement.firstElementChild.textContent;
+            }
+            if (!tip) {
+                tip = aElement.getAttribute("data-inline-memo-content");
+                if (tip) {
+                    tooltipClass = "memo"; // 为行级备注添加 class https://github.com/siyuan-note/siyuan/issues/6161
+                }
             }
             if (!tip) {
                 const href = aElement.getAttribute("data-href") || "";
                 // 链接地址强制换行 https://github.com/siyuan-note/siyuan/issues/11539
                 if (href) {
                     tip = `<span style="word-break: break-all">${href.substring(0, Constants.SIZE_TITLE)}</span>`;
+                    tooltipClass = "href"; // 为超链接添加 class https://github.com/siyuan-note/siyuan/issues/11440#issuecomment-2119080691
                 }
                 const title = aElement.getAttribute("data-title");
                 if (tip && isLocalPath(href) && !aElement.classList.contains("b3-tooltips")) {
@@ -63,25 +68,25 @@ export const initBlockPopover = (app: App) => {
                     fetchPost("/api/asset/statAsset", {path: href}, (response) => {
                         if (response.code === 1) {
                             if (title) {
-                                assetTip += "<br>" + title;
+                                assetTip += '<div class="fn__hr"></div>' + title;
                             }
                         } else {
-                            assetTip += ` ${response.data.hSize}${title ? "<br>" + title : ""}<br>${window.siyuan.languages.modifiedAt} ${response.data.hUpdated}<br>${window.siyuan.languages.createdAt} ${response.data.hCreated}`;
+                            assetTip += ` ${response.data.hSize}${title ? '<div class="fn__hr"></div>' + title : ""}<br>${window.siyuan.languages.modifiedAt} ${response.data.hUpdated}<br>${window.siyuan.languages.createdAt} ${response.data.hCreated}`;
                         }
-                        showTooltip(assetTip, aElement);
+                        showTooltip(assetTip, aElement, tooltipClass);
                     });
                     tip = "";
                 } else if (title) {
-                    tip += "<br>" + title;
+                    tip += '<div class="fn__hr"></div>' + title;
                 }
             }
             if (tip && !aElement.classList.contains("b3-tooltips")) {
                 // https://github.com/siyuan-note/siyuan/issues/11294
                 try {
-                    showTooltip(decodeURIComponent(tip), aElement);
+                    showTooltip(decodeURIComponent(tip), aElement, tooltipClass);
                 } catch (e) {
                     // https://ld246.com/article/1718235737991
-                    showTooltip(tip, aElement);
+                    showTooltip(tip, aElement, tooltipClass);
                 }
                 event.stopPropagation();
             } else {

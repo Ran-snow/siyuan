@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-<a href="README_zh_CN.md">中文</a>
+<a href="README_zh_CN.md">中文</a> | <a href="README_ja_JP.md">日本語</a>
 </p>
 
 ---
@@ -100,7 +100,7 @@ Most features are free, even for commercial use.
 * Multi-tab, drag and drop to split screen
 * Template snippet
 * JavaScript/CSS snippet
-* Android/iOS App
+* Android/iOS/HarmonyOS App
 * Docker deployment
 * [API](https://github.com/siyuan-note/siyuan/blob/master/API.md)
 * Community marketplace
@@ -120,11 +120,18 @@ Some features are only available to paid members, for more details please refer 
 | [petal](https://github.com/siyuan-note/petal)            | Plugin API            | ![GitHub forks](https://img.shields.io/github/forks/siyuan-note/petal)          | ![GitHub Repo stars](https://img.shields.io/github/stars/siyuan-note/petal)          |
 | [android](https://github.com/siyuan-note/siyuan-android) | Android App           | ![GitHub forks](https://img.shields.io/github/forks/siyuan-note/siyuan-android) | ![GitHub Repo stars](https://img.shields.io/github/stars/siyuan-note/siyuan-android) |
 | [ios](https://github.com/siyuan-note/siyuan-ios)         | iOS App               | ![GitHub forks](https://img.shields.io/github/forks/siyuan-note/siyuan-ios)     | ![GitHub Repo stars](https://img.shields.io/github/stars/siyuan-note/siyuan-ios)     |
+| [harmony](https://github.com/siyuan-note/siyuan-harmony) | HarmonyOS App         | ![GitHub forks](https://img.shields.io/github/forks/siyuan-note/siyuan-harmony) | ![GitHub Repo stars](https://img.shields.io/github/stars/siyuan-note/siyuan-harmony) |
 | [riff](https://github.com/siyuan-note/riff)              | Spaced repetition     | ![GitHub forks](https://img.shields.io/github/forks/siyuan-note/riff)           | ![GitHub Repo stars](https://img.shields.io/github/stars/siyuan-note/riff)           |
 
 ## 🌟 Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=siyuan-note/siyuan&type=Date)](https://star-history.com/#siyuan-note/siyuan&Date)
+<a href="https://star-history.com/#siyuan-note/siyuan&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=siyuan-note/siyuan&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=siyuan-note/siyuan&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=siyuan-note/siyuan&type=Date" />
+ </picture>
+</a>
 
 ## 🗺️ Roadmap
 
@@ -340,6 +347,7 @@ SiYuan is completely open source, and contributions are welcome:
 * [User Interface and Kernel](https://github.com/siyuan-note/siyuan)
 * [Android](https://github.com/siyuan-note/siyuan-android)
 * [iOS](https://github.com/siyuan-note/siyuan-ios)
+* [HarmonyOS](https://github.com/siyuan-note/siyuan-harmony)
 * [Chrome Clipping Extension](https://github.com/siyuan-note/siyuan-chrome)
 
 For more details, please refer to [Development Guide](https://github.com/siyuan-note/siyuan/blob/master/.github/CONTRIBUTING.md).

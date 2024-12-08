@@ -33,6 +33,11 @@ import (
 	"github.com/steambap/captcha"
 )
 
+var (
+	BasicAuthHeaderKey   = "WWW-Authenticate"
+	BasicAuthHeaderValue = "Basic realm=\"SiYuan Authorization Require\", charset=\"UTF-8\""
+)
+
 func LogoutAuth(c *gin.Context) {
 	ret := gulu.Ret.NewResult()
 	defer c.JSON(http.StatusOK, ret)

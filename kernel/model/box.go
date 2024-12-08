@@ -34,6 +34,7 @@ import (
 	"github.com/88250/lute/html"
 	"github.com/88250/lute/lex"
 	"github.com/88250/lute/parse"
+	"github.com/araddon/dateparse"
 	"github.com/siyuan-note/filelock"
 	"github.com/siyuan-note/logging"
 	"github.com/siyuan-note/siyuan/kernel/cache"
@@ -397,7 +398,7 @@ type BoxInfo struct {
 func (box *Box) GetInfo() (ret *BoxInfo) {
 	ret = &BoxInfo{
 		ID:   box.ID,
-		Name: box.Name,
+		Name: util.EscapeHTML(box.Name),
 	}
 
 	fileInfos := box.ListFiles("/")
@@ -493,9 +494,11 @@ func parseKTree(kramdown []byte) (ret *parse.Tree) {
 	return
 }
 
-func normalizeTree(tree *parse.Tree) {
+func normalizeTree(tree *parse.Tree) (yfmRootID, yfmTitle, yfmUpdated string) {
 	if nil == tree.Root.FirstChild {
-		tree.Root.AppendChild(treenode.NewParagraph())
+		tree.Root.AppendChild(treenode.NewParagraph(""))
+	} else if !tree.Root.FirstChild.IsBlock() || ast.NodeKramdownBlockIAL == tree.Root.FirstChild.Type {
+		tree.Root.PrependChild(treenode.NewParagraph(""))
 	}
 
 	var unlinks []*ast.Node
@@ -566,22 +569,68 @@ func normalizeTree(tree *parse.Tree) {
 			parseErr := yaml.Unmarshal(n.Tokens, &attrs)
 			if parseErr != nil {
 				logging.LogWarnf("parse YAML front matter [%s] failed: %s", n.Tokens, parseErr)
-			} else {
-				for attrK, attrV := range attrs {
-					validKeyName := true
-					for i := 0; i < len(attrK); i++ {
-						if !lex.IsASCIILetterNumHyphen(attrK[i]) {
-							validKeyName = false
-							break
-						}
+				return ast.WalkContinue
+			}
+
+			for attrK, attrV := range attrs {
+				// Improve parsing of YAML Front Matter when importing Markdown https://github.com/siyuan-note/siyuan/issues/12962
+				if "title" == attrK {
+					yfmTitle = fmt.Sprint(attrV)
+					tree.Root.SetIALAttr("title", yfmTitle)
+					continue
+				}
+				if "date" == attrK {
+					created, parseTimeErr := dateparse.ParseIn(fmt.Sprint(attrV), time.Local)
+					if nil == parseTimeErr {
+						yfmRootID = created.Format("20060102150405") + "-" + gulu.Rand.String(7)
+						tree.Root.ID = yfmRootID
+						tree.Root.SetIALAttr("id", yfmRootID)
 					}
-					if !validKeyName {
-						logging.LogWarnf("invalid YAML key [%s] in [%s]", attrK, n.ID)
+					continue
+				}
+				if "lastmod" == attrK {
+					updated, parseTimeErr := dateparse.ParseIn(fmt.Sprint(attrV), time.Local)
+					if nil == parseTimeErr {
+						yfmUpdated = updated.Format("20060102150405")
+						tree.Root.SetIALAttr("updated", yfmUpdated)
+					}
+					continue
+				}
+				if "tags" == attrK {
+					var tags string
+					if str, ok := attrV.(string); ok {
+						tags = strings.TrimSpace(str)
+						tree.Root.SetIALAttr("tags", tags)
 						continue
 					}
 
-					tree.Root.SetIALAttr("custom-"+attrK, fmt.Sprint(attrV))
+					for _, tag := range attrV.([]any) {
+						tagStr := fmt.Sprintf("%v", tag)
+						if "" == tag {
+							continue
+						}
+						tagStr = strings.TrimLeft(tagStr, "#,'\"")
+						tagStr = strings.TrimRight(tagStr, "#,'\"")
+						tags += tagStr + ","
+					}
+					tags = strings.TrimRight(tags, ",")
+					tree.Root.SetIALAttr("tags", tags)
+					continue
 				}
+
+				validKeyName := true
+				for i := 0; i < len(attrK); i++ {
+					if !lex.IsASCIILetterNumHyphen(attrK[i]) {
+						validKeyName = false
+						break
+					}
+				}
+				if !validKeyName {
+					logging.LogWarnf("invalid YAML key [%s] in [%s]", attrK, n.ID)
+					continue
+				}
+
+				tree.Root.SetIALAttr("custom-"+attrK, fmt.Sprint(attrV))
 			}
 		}
 
@@ -606,7 +655,7 @@ func FullReindex() {
 	task.AppendTask(task.DatabaseIndexFull, fullReindex)
 	task.AppendTask(task.DatabaseIndexRef, IndexRefs)
 	go func() {
-		sql.WaitForWritingDatabase()
+		sql.FlushQueue()
 		ResetVirtualBlockRefCache()
 	}()
 	task.AppendTaskWithTimeout(task.DatabaseIndexEmbedBlock, 30*time.Second, autoIndexEmbedBlock)
@@ -619,7 +668,7 @@ func fullReindex() {
 	util.PushEndlessProgress(Conf.language(35))
 	defer util.PushClearProgress()
 
-	WaitForWritingFiles()
+	FlushTxQueue()
 
 	if err := sql.InitDatabase(true); err != nil {
 		os.Exit(logging.ExitCodeReadOnlyDatabase)
@@ -659,7 +708,7 @@ func getBoxesByPaths(paths []string) (ret map[string]*Box) {
 	ret = map[string]*Box{}
 	var ids []string
 	for _, p := range paths {
-		ids = append(ids, strings.TrimSuffix(path.Base(p), ".sy"))
+		ids = append(ids, util.GetTreeID(p))
 	}
 
 	bts := treenode.GetBlockTrees(ids)

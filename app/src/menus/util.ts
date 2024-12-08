@@ -9,7 +9,7 @@ import {Constants} from "../constants";
 import {openNewWindowById} from "../window/openNewWindow";
 import {MenuItem} from "./Menu";
 import {App} from "../index";
-import {isInAndroid, openByMobile, updateHotkeyTip} from "../protyle/util/compatibility";
+import {isInAndroid, isInHarmony, openByMobile, updateHotkeyTip} from "../protyle/util/compatibility";
 import {checkFold} from "../util/noRelyPCFunction";
 
 export const exportAsset = (src: string) => {
@@ -33,7 +33,7 @@ export const exportAsset = (src: string) => {
     };
 };
 
-export const openEditorTab = (app: App, ids: string[], notebookId?: string, pathString?: string) => {
+export const openEditorTab = (app: App, ids: string[], notebookId?: string, pathString?: string, onlyGetMenus = false) => {
     /// #if !MOBILE
     const openSubmenus: IMenu[] = [{
         id: "insertRight",
@@ -125,9 +125,7 @@ export const openEditorTab = (app: App, ids: string[], notebookId?: string, path
         label: window.siyuan.languages.openByNewWindow,
         icon: "iconOpenWindow",
         click() {
-            ids.forEach((id) => {
-                openNewWindowById(id);
-            });
+            openNewWindowById(ids);
         }
     });
     /// #endif
@@ -161,6 +159,9 @@ export const openEditorTab = (app: App, ids: string[], notebookId?: string, path
         }
     });
     /// #endif
+    if (onlyGetMenus) {
+        return openSubmenus;
+    }
     window.siyuan.menus.menu.append(new MenuItem({
         id: "openBy",
         label: window.siyuan.languages.openBy,
@@ -170,9 +171,12 @@ export const openEditorTab = (app: App, ids: string[], notebookId?: string, path
     /// #endif
 };
 
-export const copyPNGByLink = (link:string) => {
+export const copyPNGByLink = (link: string) => {
     if (isInAndroid()) {
         window.JSAndroid.writeImageClipboard(link);
+        return;
+    } else if (isInHarmony()) {
+        window.JSHarmony.writeImageClipboard(link);
         return;
     } else {
         const canvas = document.createElement("canvas");

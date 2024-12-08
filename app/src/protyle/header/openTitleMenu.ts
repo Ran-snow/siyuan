@@ -23,6 +23,7 @@ import {genImportMenu} from "../../menus/navigation";
 import {transferBlockRef} from "../../menus/block";
 import {addEditorToDatabase} from "../render/av/addToDatabase";
 import {openFileById} from "../../editor/util";
+import {hasTopClosestByClassName} from "../util/hasClosest";
 
 export const openTitleMenu = (protyle: IProtyle, position: IPosition) => {
     hideTooltip();
@@ -41,7 +42,7 @@ export const openTitleMenu = (protyle: IProtyle, position: IPosition) => {
             label: window.siyuan.languages.copy,
             icon: "iconCopy",
             type: "submenu",
-            submenu: copySubMenu(protyle.block.rootID)
+            submenu: copySubMenu([protyle.block.rootID])
         }).element);
         if (!protyle.disabled) {
             window.siyuan.menus.menu.append(movePathToMenu([protyle.path]));
@@ -263,6 +264,7 @@ export const openTitleMenu = (protyle: IProtyle, position: IPosition) => {
         genImportMenu(protyle.notebookId, protyle.path);
         window.siyuan.menus.menu.append(exportMd(protyle.block.showAll ? protyle.block.id : protyle.block.rootID));
 
+        window.siyuan.menus.menu.append(new MenuItem({id: "separator_4", type: "separator"}).element);
         if (protyle?.app?.plugins) {
             emitOpenMenu({
                 plugins: protyle.app.plugins,
@@ -271,10 +273,9 @@ export const openTitleMenu = (protyle: IProtyle, position: IPosition) => {
                     protyle,
                     data: response.data,
                 },
-                separatorPosition: "top",
+                separatorPosition: "bottom",
             });
         }
-        window.siyuan.menus.menu.append(new MenuItem({id: "separator_4", type: "separator"}).element);
         window.siyuan.menus.menu.append(new MenuItem({
             id: "updateAndCreatedAt",
             iconHTML: "",
@@ -287,5 +288,7 @@ export const openTitleMenu = (protyle: IProtyle, position: IPosition) => {
         /// #else
         window.siyuan.menus.menu.popup(position);
         /// #endif
+        const popoverElement = hasTopClosestByClassName(protyle.element, "block__popover", true);
+        window.siyuan.menus.menu.element.setAttribute("data-from", popoverElement ? popoverElement.dataset.level + "popover" : "app");
     });
 };

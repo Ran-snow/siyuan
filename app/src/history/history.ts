@@ -1,19 +1,20 @@
-import { Dialog } from "../dialog";
-import { confirmDialog } from "../dialog/confirmDialog";
-import { Constants } from "../constants";
-import { hasClosestByClassName } from "../protyle/util/hasClosest";
-import { renderAssetsPreview } from "../asset/renderAssets";
-import { Protyle } from "../protyle";
-import { disabledProtyle, onGet } from "../protyle/util/onGet";
+import {Dialog} from "../dialog";
+import {confirmDialog} from "../dialog/confirmDialog";
+import {Constants} from "../constants";
+import {hasClosestByClassName} from "../protyle/util/hasClosest";
+import {renderAssetsPreview} from "../asset/renderAssets";
+import {Protyle} from "../protyle";
+import {disabledProtyle, onGet} from "../protyle/util/onGet";
 import * as dayjs from "dayjs";
-import { fetchPost } from "../util/fetch";
-import { escapeAttr, escapeHtml } from "../util/escape";
-import { isMobile } from "../util/functions";
-import { showDiff } from "./diff";
-import { setStorageVal } from "../protyle/util/compatibility";
-import { openModel } from "../mobile/menu/model";
-import { closeModel } from "../mobile/util/closePanel";
-import { App } from "../index";
+import {fetchPost} from "../util/fetch";
+import {escapeAttr, escapeHtml} from "../util/escape";
+import {isMobile} from "../util/functions";
+import {showDiff} from "./diff";
+import {setStorageVal} from "../protyle/util/compatibility";
+import {openModel} from "../mobile/menu/model";
+import {closeModel} from "../mobile/util/closePanel";
+import {App} from "../index";
+import {resizeSide} from "./resizeSide";
 
 let historyEditor: Protyle;
 
@@ -65,11 +66,9 @@ const renderDoc = (element: HTMLElement, currentPage: number) => {
         opElement.querySelector('option[value="replace"]').classList.remove("fn__none");
         opElement.querySelector('option[value="outline"]').classList.remove("fn__none");
     }
-    window.siyuan.storage[Constants.LOCAL_HISTORY] = {
-        notebookId: notebookElement.value,
-        type: parseInt(typeElement.value),
-        operation: opElement.value
-    };
+    window.siyuan.storage[Constants.LOCAL_HISTORY].notebookId = notebookElement.value;
+    window.siyuan.storage[Constants.LOCAL_HISTORY].type = parseInt(typeElement.value);
+    window.siyuan.storage[Constants.LOCAL_HISTORY].operation = opElement.value;
     setStorageVal(Constants.LOCAL_HISTORY, window.siyuan.storage[Constants.LOCAL_HISTORY]);
     fetchPost("/api/history/searchHistory", {
         notebook: notebookElement.value,
@@ -276,7 +275,7 @@ const renderRepo = (element: Element, currentPage: number) => {
             previousElement.setAttribute("disabled", "disabled");
         }
         nextElement.setAttribute("disabled", "disabled");
-        fetchPost(`/api/repo/${selectValue}`, { page: currentPage }, (response) => {
+        fetchPost(`/api/repo/${selectValue}`, {page: currentPage}, (response) => {
             selectElement.disabled = false;
             if (currentPage < response.data.pageCount) {
                 nextElement.removeAttribute("disabled");
@@ -348,14 +347,14 @@ export const openHistory = (app: App) => {
     });
 
     const contentHTML = `<div class="fn__flex-column" style="height: 100%;">
-    <div class="layout-tab-bar fn__flex" style="border-radius: var(--b3-border-radius-b) var(--b3-border-radius-b) 0 0">
+    <div class="layout-tab-bar fn__flex" ${isMobile() ? "" : 'style="border-radius: var(--b3-border-radius-b) var(--b3-border-radius-b) 0 0"'}>
         <div data-type="doc" class="item item--full item--focus"><span class="fn__flex-1"></span><span class="item__text">${window.siyuan.languages.fileHistory}</span><span class="fn__flex-1"></span></div>
         <div data-type="notebook" style="min-width: 160px" class="item item--full"><span class="fn__flex-1"></span><span class="item__text">${window.siyuan.languages.removedNotebook}</span><span class="fn__flex-1"></span></div>
         <div data-type="repo" class="item item--full"><span class="fn__flex-1"></span><span class="item__text">${window.siyuan.languages.dataSnapshot}</span><span class="fn__flex-1"></span></div>
     </div>
     <div class="fn__flex-1 fn__flex" id="historyContainer">
         <div data-type="doc" class="history__repo fn__block" data-init="true">
-            <div style="overflow:auto;">
+            <div class="history__action">
                 <div class="block__icons">
                     <span data-type="docprevious" class="block__icon block__icon--show b3-tooltips b3-tooltips__e" disabled="disabled" aria-label="${window.siyuan.languages.previousLabel}"><svg><use xlink:href='#iconLeft'></use></svg></span>
                     <button class="b3-button b3-button--text ft__selectnone" data-type="jumpHistoryPage" data-totalpage="1">1</button>
@@ -394,19 +393,23 @@ export const openHistory = (app: App) => {
                 </div>
             </div>
             <div class="fn__flex fn__flex-1 history__panel">
-                <ul class="b3-list b3-list--background" style="overflow:auto;">
+                <ul class="b3-list b3-list--background history__side" ${isMobile() ? "" : `style="width: ${localHistory.sideWidth}"`}>
                     <li class="b3-list--empty">${window.siyuan.languages.emptyContent}</li>
                 </ul>
-                <div class="fn__flex-1 history__text fn__none" data-type="assetPanel"></div>
-                <textarea class="fn__flex-1 history__text fn__none" data-type="mdPanel"></textarea>
-                <div class="fn__flex-1 history__text fn__none" style="padding: 0" data-type="docPanel"></div>
+                <div class="history__resize"></div>
+                <div class="fn__flex-column fn__flex-1">
+                    <div class="protyle-title__input ft__center ft__breakword"></div>
+                    <div class="fn__flex-1 history__text fn__none" data-type="assetPanel"></div>
+                    <textarea class="fn__flex-1 history__text fn__none" data-type="mdPanel"></textarea>
+                    <div class="fn__flex-1 history__text fn__none" style="padding: 0" data-type="docPanel"></div>
+                </div>
             </div>
         </div>
         <ul data-type="notebook" style="padding: 8px 0;" class="fn__none b3-list b3-list--background">
             <li class="b3-list--empty">${window.siyuan.languages.emptyContent}</li>
         </ul>
         <div data-type="repo" class="fn__none history__repo">
-            <div style="overflow: auto"">
+            <div class="history__action">
                 <div class="block__icons">
                     <span data-type="previous" class="block__icon block__icon--show b3-tooltips b3-tooltips__e" disabled="disabled" aria-label="${window.siyuan.languages.previousLabel}"><svg><use xlink:href='#iconLeft'></use></svg></span>
                     <button class="b3-button b3-button--text ft__selectnone" data-type="jumpRepoPage" data-totalpage="1">1</button>
@@ -442,6 +445,7 @@ export const openHistory = (app: App) => {
             icon: "iconHistory",
             title: window.siyuan.languages.dataHistory,
             bindEvent(element) {
+                element.firstElementChild.setAttribute("style", "background-color:var(--b3-theme-background);height:100%");
                 bindEvent(app, element.firstElementChild);
             }
         });
@@ -450,12 +454,15 @@ export const openHistory = (app: App) => {
             content: contentHTML,
             width: "90vw",
             height: "80vh",
+            containerClassName: "b3-dialog__container--theme",
             destroyCallback() {
                 historyEditor = undefined;
             }
         });
         dialog.element.setAttribute("data-key", Constants.DIALOG_HISTORY);
+        dialog.element.querySelector("input").focus();
         bindEvent(app, dialog.element, dialog);
+        resizeSide(dialog.element.querySelector(".history__resize"), dialog.element.querySelector(".history__side"), "sideWidth");
     }
 };
 
@@ -478,6 +485,7 @@ const bindEvent = (app: App, element: Element, dialog?: Dialog) => {
     const docElement = firstPanelElement.querySelector('.history__text[data-type="docPanel"]') as HTMLElement;
     const assetElement = firstPanelElement.querySelector('.history__text[data-type="assetPanel"]');
     const mdElement = firstPanelElement.querySelector('.history__text[data-type="mdPanel"]') as HTMLTextAreaElement;
+    const titleElement = firstPanelElement.querySelector(".protyle-title__input") as HTMLElement;
     renderDoc(firstPanelElement, 1);
     historyEditor = new Protyle(app, docElement, {
         blockId: "",
@@ -530,8 +538,18 @@ const bindEvent = (app: App, element: Element, dialog?: Dialog) => {
                 event.preventDefault();
                 break;
             } else if (target.classList.contains("b3-list-item__action") && type === "rollback" && !window.siyuan.config.readonly) {
-                confirmDialog("⚠️ " + window.siyuan.languages.rollback, `${window.siyuan.languages.rollbackConfirm.replace("${date}", target.parentElement.textContent.trim())}`, () => {
-                    const dataType = target.parentElement.getAttribute("data-type");
+                const dataType = target.parentElement.getAttribute("data-type");
+                let name = target.previousElementSibling.previousElementSibling.textContent.trim();
+                let time = dayjs(parseInt(target.parentElement.getAttribute("data-created")) * 1000).format("YYYY-MM-DD HH:mm:ss");
+                if (dataType === "notebook") {
+                    time = target.parentElement.parentElement.previousElementSibling.textContent.trim();
+                } else if (dataType === "repoitem") {
+                    name = window.siyuan.languages.workspaceData;
+                    time = target.parentElement.querySelector("span[data-type='hCreated']").textContent.trim();
+                }
+                const confirmTip = window.siyuan.languages.rollbackConfirm.replace("${name}", name)
+                    .replace("${time}", time);
+                confirmDialog("⚠️ " + window.siyuan.languages.rollback, confirmTip, () => {
                     if (dataType === "assets") {
                         fetchPost("/api/history/rollbackAssetsHistory", {
                             historyPath: target.parentElement.getAttribute("data-path")
@@ -656,7 +674,7 @@ const bindEvent = (app: App, element: Element, dialog?: Dialog) => {
                             target.parentElement.querySelector(`.b3-list-item[data-id="${idJSON.splice(0, 1)[0].id}"]`)?.classList.remove("b3-list-item--focus");
                         }
                     }
-                    idJSON.push({ id, time: target.querySelector('[data-type="hCreated"]').textContent });
+                    idJSON.push({id, time: target.querySelector('[data-type="hCreated"]').textContent});
                 }
 
                 if (idJSON.length === 2) {
@@ -694,6 +712,7 @@ const bindEvent = (app: App, element: Element, dialog?: Dialog) => {
                         }
                     });
                 }
+                titleElement.textContent = target.querySelector(".b3-list-item__text").textContent;
                 let currentItem = hasClosestByClassName(target, "b3-list") as HTMLElement;
                 if (currentItem) {
                     currentItem = currentItem.querySelector(".b3-list-item--focus");
@@ -728,7 +747,7 @@ const bindEvent = (app: App, element: Element, dialog?: Dialog) => {
                     genRepoDialog.destroy();
                 });
                 btnsElement[1].addEventListener("click", () => {
-                    fetchPost("/api/repo/createSnapshot", { memo: textareaElement.value }, () => {
+                    fetchPost("/api/repo/createSnapshot", {memo: textareaElement.value}, () => {
                         renderRepo(repoElement, 1);
                     });
                     genRepoDialog.destroy();
@@ -739,10 +758,10 @@ const bindEvent = (app: App, element: Element, dialog?: Dialog) => {
             } else if (type === "removeRepoTagSnapshot" || type === "removeCloudRepoTagSnapshot") {
                 const tag = target.parentElement.getAttribute("data-tag");
                 confirmDialog(window.siyuan.languages.deleteOpConfirm, `${window.siyuan.languages.confirmDelete} <i>${tag}</i>?`, () => {
-                    fetchPost("/api/repo/" + type, { tag }, () => {
+                    fetchPost("/api/repo/" + type, {tag}, () => {
                         renderRepo(repoElement, 1);
                     });
-                });
+                }, undefined, true);
                 event.stopPropagation();
                 event.preventDefault();
                 break;
@@ -821,9 +840,9 @@ const bindEvent = (app: App, element: Element, dialog?: Dialog) => {
                 if (totalPage > 1) {
                     confirmDialog(
                         window.siyuan.languages.jumpToPage.replace("${x}", totalPage),
-                        `<input style="width: 100%;" class="b3-text-field fn__flex-center" type="number" min="1" max="${totalPage}" value="${currentPage}">`,
-                        (dialog: Dialog) => {
-                            const inputElement = dialog.element.querySelector(".b3-text-field") as HTMLInputElement;
+                        `<input class="b3-text-field fn__block" type="number" min="1" max="${totalPage}" value="${currentPage}">`,
+                        (confirmD) => {
+                            const inputElement = confirmD.element.querySelector(".b3-text-field") as HTMLInputElement;
                             if (inputElement.value === "") {
                                 return;
                             }
@@ -840,9 +859,9 @@ const bindEvent = (app: App, element: Element, dialog?: Dialog) => {
                 if (totalPage > 1) {
                     confirmDialog(
                         window.siyuan.languages.jumpToPage.replace("${x}", totalPage),
-                        `<input style="width: 100%;" class="b3-text-field fn__flex-center" type="number" min="1" max="${totalPage}" value="${currentPage}">`,
-                        (dialog: Dialog) => {
-                            const inputElement = dialog.element.querySelector(".b3-text-field") as HTMLInputElement;
+                        `<input class="b3-text-field fn__block" type="number" min="1" max="${totalPage}" value="${currentPage}">`,
+                        (confirmD) => {
+                            const inputElement = confirmD.element.querySelector(".b3-text-field") as HTMLInputElement;
                             if (inputElement.value === "") {
                                 return;
                             }
@@ -852,8 +871,6 @@ const bindEvent = (app: App, element: Element, dialog?: Dialog) => {
                         }
                     );
                 }
-
-
             } else if ((type === "docprevious" || type === "docnext") && target.getAttribute("disabled") !== "disabled") {
                 const currentPage = parseInt(firstPanelElement.getAttribute("data-page"));
                 renderDoc(firstPanelElement, type === "docprevious" ? currentPage - 1 : currentPage + 1);

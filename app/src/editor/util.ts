@@ -41,7 +41,7 @@ export const openFileById = async (options: {
     id: string,
     position?: string,
     mode?: TEditorMode,
-    action?: string[]
+    action?: TProtyleAction[]
     keepCursor?: boolean
     zoomIn?: boolean
     removeCurrentTab?: boolean
@@ -196,10 +196,14 @@ export const openFile = async (options: IOpenFileOptions) => {
 
     /// #if !BROWSER
     // https://github.com/siyuan-note/siyuan/issues/7491
-    if (!options.position) {
+    if (!options.position || (options.position === "right" && options.assetPath)) {
         let hasMatch = false;
-        const optionsClone = Object.assign({}, options);
-        delete optionsClone.app;    // 防止 JSON.stringify 时产生递归
+        const optionsClone: IObject = {};
+        Object.keys(options).forEach((key: keyof IOpenFileOptions) => {
+            if (key !== "app" && options[key] && typeof options[key] !== "function") {
+                optionsClone[key] = JSON.parse(JSON.stringify(options[key]));
+            }
+        });
         hasMatch = await ipcRenderer.invoke(Constants.SIYUAN_GET, {
             cmd: Constants.SIYUAN_OPEN_FILE,
             options: JSON.stringify(optionsClone),
@@ -382,7 +386,6 @@ const switchEditor = (editor: Editor, options: IOpenFileOptions, allModels: IMod
             if (nodeElement) {
                 const newRange = focusBlock(nodeElement);
                 if (newRange) {
-                    // 需要更新 range，否则文档大纲点击导致切换页签时因为 resize 中 `保持光标位置不变` 会导致光标跳动
                     editor.editor.protyle.toolbar.range = newRange;
                 }
                 scrollCenter(editor.editor.protyle, nodeElement, true);

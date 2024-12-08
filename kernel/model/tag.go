@@ -206,11 +206,8 @@ type Tag struct {
 type Tags []*Tag
 
 func BuildTags() (ret *Tags) {
-	WaitForWritingFiles()
-
-	if !sql.IsEmptyQueue() {
-		sql.WaitForWritingDatabase()
-	}
+	FlushTxQueue()
+	sql.FlushQueue()
 
 	ret = &Tags{}
 	labels := labelTags()
