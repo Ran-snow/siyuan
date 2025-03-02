@@ -39,6 +39,35 @@ export const readText = () => {
     return navigator.clipboard.readText();
 };
 
+export const readClipboard = async () => {
+    const text: {
+        textHTML?: string,
+        textPlain?: string,
+        files?: File[],
+    } = {textPlain: "", textHTML: ""};
+    if (isInAndroid()) {
+        text.textPlain = window.JSAndroid.readClipboard();
+    } else if (isInHarmony()) {
+        text.textPlain = window.JSHarmony.readClipboard();
+    }
+    const clipboardContents = await navigator.clipboard.read();
+    for (const item of clipboardContents) {
+        if (item.types.includes("text/html")) {
+            const blob = await item.getType("text/html");
+            text.textHTML = await blob.text();
+        }
+        if (item.types.includes("text/plain")) {
+            const blob = await item.getType("text/plain");
+            text.textPlain = await blob.text();
+        }
+        if (item.types.includes("image/png")) {
+            const blob = await item.getType("image/png");
+            text.files = [new File([blob], "image.png", {type: "image/png", lastModified: Date.now()})];
+        }
+    }
+    return text;
+};
+
 export const writeText = (text: string) => {
     let range: Range;
     if (getSelection().rangeCount > 0) {
@@ -138,6 +167,23 @@ export const isMac = () => {
     return navigator.platform.toUpperCase().indexOf("MAC") > -1;
 };
 
+export const isWin11 = async () => {
+    if (!(navigator as any).userAgentData || !(navigator as any).userAgentData.getHighEntropyValues) {
+        return false;
+    }
+    const ua = await (navigator as any).userAgentData.getHighEntropyValues(["platformVersion"]);
+    if ((navigator as any).userAgentData.platform === "Windows") {
+        if (parseInt(ua.platformVersion.split(".")[0]) >= 13) {
+            return true;
+        }
+    }
+    return false;
+};
+
+export const isWindows = () => {
+    return navigator.platform.toUpperCase().indexOf("WIN") > -1;
+};
+
 export const isInAndroid = () => {
     return window.siyuan.config.system.container === "android" && window.JSAndroid;
 };
@@ -220,7 +266,7 @@ export const getLocalStorage = (cb: () => void) => {
             dark: "dark",
             annoColor: "var(--b3-pdf-background1)"
         };
-        defaultStorage[Constants.LOCAL_LAYOUTS] = [];   // {name: "", layout:{}, time: number, filespaths: filesPath[]}
+        defaultStorage[Constants.LOCAL_LAYOUTS] = [];   // {name: "", layout:{}, time: number, filespaths: IFilesPath[]}
         defaultStorage[Constants.LOCAL_AI] = [];   // {name: "", memo: ""}
         defaultStorage[Constants.LOCAL_PLUGIN_DOCKS] = {};  // { pluginName: {dockId: IPluginDockTab}}
         defaultStorage[Constants.LOCAL_PLUGINTOPUNPIN] = [];
@@ -271,7 +317,7 @@ export const getLocalStorage = (cb: () => void) => {
             currentTab: "emoji"
         };
         defaultStorage[Constants.LOCAL_FONTSTYLES] = [];
-        defaultStorage[Constants.LOCAL_FILESPATHS] = [];    // filesPath[]
+        defaultStorage[Constants.LOCAL_FILESPATHS] = [];    // IFilesPath[]
         defaultStorage[Constants.LOCAL_SEARCHDATA] = {
             page: 1,
             sort: 0,
@@ -300,6 +346,7 @@ export const getLocalStorage = (cb: () => void) => {
             replaceTypes: Object.assign({}, Constants.SIYUAN_DEFAULT_REPLACETYPES),
         };
         defaultStorage[Constants.LOCAL_ZOOM] = 1;
+        defaultStorage[Constants.LOCAL_MOVE_PATH] = {keys: [], k: ""};
 
         [Constants.LOCAL_EXPORTIMG, Constants.LOCAL_SEARCHKEYS, Constants.LOCAL_PDFTHEME, Constants.LOCAL_BAZAAR,
             Constants.LOCAL_EXPORTWORD, Constants.LOCAL_EXPORTPDF, Constants.LOCAL_DOCINFO, Constants.LOCAL_FONTSTYLES,
@@ -307,7 +354,7 @@ export const getLocalStorage = (cb: () => void) => {
             Constants.LOCAL_PLUGINTOPUNPIN, Constants.LOCAL_SEARCHASSET, Constants.LOCAL_FLASHCARD,
             Constants.LOCAL_DIALOGPOSITION, Constants.LOCAL_SEARCHUNREF, Constants.LOCAL_HISTORY,
             Constants.LOCAL_OUTLINE, Constants.LOCAL_FILEPOSITION, Constants.LOCAL_FILESPATHS, Constants.LOCAL_IMAGES,
-            Constants.LOCAL_PLUGIN_DOCKS, Constants.LOCAL_EMOJIS].forEach((key) => {
+            Constants.LOCAL_PLUGIN_DOCKS, Constants.LOCAL_EMOJIS, Constants.LOCAL_MOVE_PATH].forEach((key) => {
             if (typeof response.data[key] === "string") {
                 try {
                     const parseData = JSON.parse(response.data[key]);

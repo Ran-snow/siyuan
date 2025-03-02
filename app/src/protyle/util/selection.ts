@@ -5,7 +5,7 @@ import {
     hasPreviousSibling,
     isNotEditBlock
 } from "../wysiwyg/getBlock";
-import {hasClosestByAttribute, hasClosestByMatchTag} from "./hasClosest";
+import {hasClosestByAttribute, hasClosestByTag} from "./hasClosest";
 import {countBlockWord, countSelectWord} from "../../layout/status";
 import {hideElements} from "../ui/hideElements";
 
@@ -28,8 +28,8 @@ export const fixTableRange = (range: Range) => {
     if (range.toString() !== "" && tableElement && range.commonAncestorContainer.nodeType !== 3) {
         const parentTag = (range.commonAncestorContainer as Element).tagName;
         if (parentTag !== "TH" && parentTag !== "TD") {
-            const startCellElement = hasClosestByMatchTag(range.startContainer, "TD") || hasClosestByMatchTag(range.startContainer, "TH");
-            const endCellElement = hasClosestByMatchTag(range.endContainer, "TD") || hasClosestByMatchTag(range.endContainer, "TH");
+            const startCellElement = hasClosestByTag(range.startContainer, "TD") || hasClosestByTag(range.startContainer, "TH");
+            const endCellElement = hasClosestByTag(range.endContainer, "TD") || hasClosestByTag(range.endContainer, "TH");
             if (!startCellElement && !endCellElement) {
                 const cellElement = tableElement.querySelector("th") || tableElement.querySelector("td");
                 range.setStart(cellElement.firstChild, 0);
@@ -48,7 +48,7 @@ export const selectAll = (protyle: IProtyle, nodeElement: Element, range: Range)
     if (editElement) {
         let position;
         if (editElement.tagName === "TABLE") {
-            const cellElement = hasClosestByMatchTag(range.startContainer, "TD") || hasClosestByMatchTag(range.startContainer, "TH");
+            const cellElement = hasClosestByTag(range.startContainer, "TD") || hasClosestByTag(range.startContainer, "TH");
             if (cellElement) {
                 position = getSelectionOffset(cellElement, nodeElement, range);
                 if (position.start !== 0 || position.end !== cellElement.textContent.length) {
@@ -114,8 +114,11 @@ export const selectAll = (protyle: IProtyle, nodeElement: Element, range: Range)
     hideElements(["select"], protyle);
     const ids: string [] = [];
     Array.from(protyle.wysiwyg.element.children).forEach(item => {
-        item.classList.add("protyle-wysiwyg--select");
-        ids.push(item.getAttribute("data-node-id"));
+        const nodeId = item.getAttribute("data-node-id");
+        if (nodeId) {
+            item.classList.add("protyle-wysiwyg--select");
+            ids.push(nodeId);
+        }
     });
     countBlockWord(ids, protyle.block.rootID);
 };
@@ -380,7 +383,7 @@ export const setFirstNodeRange = (editElement: Element, range: Range) => {
     return range;
 };
 
-export const focusByOffset = (container: Element, start: number, end: number) => {
+export const focusByOffset = (container: Element, start: number, end: number, isFocus = true) => {
     if (!container) {
         return false;
     }
@@ -448,8 +451,20 @@ export const focusByOffset = (container: Element, start: number, end: number) =>
             setLastNodeRange(getContenteditableElement(container as Element), range, false);
         }
     }
-    focusByRange(range);
+    if (isFocus) {
+        focusByRange(range);
+    }
     return range;
+};
+
+export const setInsertWbrHTML = (nodeElement: HTMLElement, range: Range, protyle: IProtyle) => {
+    const offset = getSelectionOffset(nodeElement, nodeElement, range);
+    const cloneNode = nodeElement.cloneNode(true) as HTMLElement;
+    const cloneRange = focusByOffset(cloneNode, offset.end, offset.end, false);
+    if (cloneRange) {
+        cloneRange.insertNode(document.createElement("wbr"));
+    }
+    protyle.wysiwyg.lastHTMLs[nodeElement.getAttribute("data-node-id")] = cloneNode.outerHTML;
 };
 
 export const focusByWbr = (element: Element, range: Range) => {

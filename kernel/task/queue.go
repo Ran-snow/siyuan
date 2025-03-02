@@ -138,6 +138,7 @@ const (
 	ReloadProtyle                   = "task.reload.protyle"                // 重新加载编辑器
 	SetRefDynamicText               = "task.ref.setDynamicText"            // 设置引用的动态锚文本
 	SetDefRefCount                  = "task.def.setRefCount"               // 设置定义的引用计数
+	UpdateIDs                       = "task.update.ids"                    // 更新 ID
 	PushMsg                         = "task.push.msg"                      // 推送消息
 )
 
@@ -157,6 +158,7 @@ var uniqueActions = []string{
 	ReloadProtyle,
 	SetRefDynamicText,
 	SetDefRefCount,
+	UpdateIDs,
 }
 
 func ContainIndexTask() bool {
@@ -177,7 +179,7 @@ func StatusJob() {
 	queueLock.Lock()
 	for _, task := range taskQueue {
 		action := task.Action
-		if c := count[action]; 2 < c {
+		if c := count[action]; 7 < c {
 			logging.LogWarnf("too many tasks [%s], ignore show its status", action)
 			continue
 		}

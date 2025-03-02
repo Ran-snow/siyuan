@@ -51,7 +51,7 @@ import {openCard, openCardByData} from "../../card/openCard";
 import {lockScreen} from "../../dialog/processSystem";
 import {isWindow} from "../../util/functions";
 import {reloadProtyle} from "../../protyle/util/reload";
-import {fullscreen, updateReadonly} from "../../protyle/breadcrumb/action";
+import {fullscreen} from "../../protyle/breadcrumb/action";
 import {openRecentDocs} from "../../business/openRecentDocs";
 import {App} from "../../index";
 import {openBacklink, openGraph, openOutline, toggleDockBar} from "../../layout/dock/util";
@@ -73,6 +73,8 @@ import {copyPNGByLink} from "../../menus/util";
 import {globalCommand} from "./command/global";
 import {duplicateCompletely} from "../../protyle/render/av/action";
 import {copyTextByType} from "../../protyle/toolbar/util";
+import {onlyProtyleCommand} from "./command/protyle";
+import {cancelDrag} from "./dragover";
 
 const switchDialogEvent = (app: App, event: MouseEvent) => {
     event.preventDefault();
@@ -377,9 +379,23 @@ const editKeydown = (app: App, event: KeyboardEvent) => {
     }
     if (matchHotKey(window.siyuan.config.keymap.editor.general.switchReadonly.custom, event)) {
         event.preventDefault();
-        updateReadonly(protyle.breadcrumb.element.parentElement.querySelector('.block__icon[data-type="readonly"]'), protyle);
+        onlyProtyleCommand({
+            protyle,
+            command: "switchReadonly",
+            previousRange: range,
+        });
         return true;
     }
+    if (matchHotKey(window.siyuan.config.keymap.editor.general.switchAdjust.custom, event)) {
+        event.preventDefault();
+        onlyProtyleCommand({
+            protyle,
+            command: "switchAdjust",
+            previousRange: range,
+        });
+        return true;
+    }
+
     if (matchHotKey(window.siyuan.config.keymap.editor.general.backlinks.custom, event)) {
         event.preventDefault();
         if (range) {
@@ -488,7 +504,7 @@ const editKeydown = (app: App, event: KeyboardEvent) => {
         event.preventDefault();
         return true;
     }
-    if (!isFileFocus && matchHotKey(window.siyuan.config.keymap.editor.general.copyBlockRef.custom, event)) {
+    if (range && !isFileFocus && matchHotKey(window.siyuan.config.keymap.editor.general.copyBlockRef.custom, event)) {
         event.preventDefault();
         event.stopPropagation();
         if (hasClosestByClassName(range.startContainer, "protyle-title")) {
@@ -503,13 +519,17 @@ const editKeydown = (app: App, event: KeyboardEvent) => {
                 copyPNGByLink(selectImgElement.querySelector("img").getAttribute("src"));
                 return true;
             }
+            const ids = Array.from(protyle.wysiwyg.element.querySelectorAll(".protyle-wysiwyg--select")).map(item => item.getAttribute("data-node-id"));
+            if (ids.length > 0) {
+                copyTextByType(ids, "ref");
+                return true;
+            }
             if (range.toString() !== "") {
                 getContentByInlineHTML(range, (content) => {
                     writeText(`((${nodeElement.getAttribute("data-node-id")} "${content.trim()}"))`);
                 });
             } else {
-                const ids = Array.from(protyle.wysiwyg.element.querySelectorAll(".protyle-wysiwyg--select")).map(item => item.getAttribute("data-node-id"));
-                copyTextByType(ids, "ref");
+                copyTextByType([nodeElement.getAttribute("data-node-id")], "ref");
             }
         }
         return true;
@@ -1363,20 +1383,21 @@ export const windowKeyDown = (app: App, event: KeyboardEvent) => {
         return;
     }
     // https://github.com/siyuan-note/siyuan/issues/8913#issuecomment-1679720605
-    const confirmElement = document.querySelector("#confirmDialogConfirmBtn");
-    if (confirmElement) {
+    const confirmDialogElement = document.querySelector('.b3-dialog--open[data-key="dialog-confirm"]');
+    if (confirmDialogElement) {
         if (event.key === "Enter") {
-            confirmElement.dispatchEvent(new CustomEvent("click"));
+            confirmDialogElement.dispatchEvent(new CustomEvent("click", {detail: event.key}));
             event.preventDefault();
             return;
         } else if (event.key === "Escape") {
-            confirmElement.previousElementSibling.previousElementSibling.dispatchEvent(new CustomEvent("click"));
+            confirmDialogElement.dispatchEvent(new CustomEvent("click", {detail: event.key}));
             event.preventDefault();
             return;
         }
     }
 
     if (event.key === "Escape" && !event.isComposing) {
+        cancelDrag();
         const imgPreviewElement = document.querySelector(".protyle-img");
         if (imgPreviewElement) {
             imgPreviewElement.remove();

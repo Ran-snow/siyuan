@@ -276,7 +276,7 @@ export const openFile = async (options: IOpenFileOptions) => {
             }
             wnd.showHeading();
             if (options.afterOpen) {
-                options.afterOpen(createdTab.model);
+                options.afterOpen(createdTab ? createdTab.model : undefined);
             }
             return createdTab;
         }
@@ -697,6 +697,7 @@ export const openBy = (url: string, type: "folder" | "app") => {
     } else {
         address = url.replace("file://", "");
     }
+
     // 拖入文件名包含 `)` 、`(` 的文件以 `file://` 插入后链接解析错误 https://github.com/siyuan-note/siyuan/issues/5786
     address = address.replace(/\\\)/g, ")").replace(/\\\(/g, "(");
     if (type === "app") {

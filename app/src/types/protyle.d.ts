@@ -125,9 +125,9 @@ interface ILuteOptions extends IMarkdownConfig {
 }
 
 declare class Viz {
-    constructor(worker: { worker: Worker });
+    public static instance(): Promise<Viz>;
 
-    renderSVGElement: (code: string) => Promise<any>;
+    renderSVGElement: (code: string) => SVGElement;
 }
 
 declare class Viewer {
@@ -446,8 +446,9 @@ interface IProtyleOptions {
     mode?: TEditorMode,
     blockId?: string
     rootId?: string
+    originalRefBlockIDs?: IObject
     key?: string
-    defId?: string
+    defIds?: string[]
     render?: {
         background?: boolean
         title?: boolean
@@ -458,8 +459,6 @@ interface IProtyleOptions {
     }
     /** 内部调试时使用 */
     _lutePath?: string;
-    /** 是否显示日志。默认值: false */
-    debugger?: boolean;
     /** 是否启用打字机模式。默认值: false */
     typewriterMode?: boolean;
     /** 多语言。默认值: 'zh_CN' */
@@ -486,7 +485,7 @@ interface IProtyle {
         mark: Highlight
         markHL: Highlight
         ranges: Range[]
-        rangeIndex: 0
+        rangeIndex: number
         styleElement: HTMLStyleElement
     }
     getInstance: () => import("../protyle").Protyle,

@@ -46,7 +46,17 @@ export class Title {
         this.editElement.addEventListener("paste", (event: ClipboardEvent) => {
             event.stopPropagation();
             event.preventDefault();
-            document.execCommand("insertText", false, replaceFileName(event.clipboardData.getData("text/plain")));
+            // 不能使用 range.insertNode，否则无法撤销
+            let text = event.clipboardData.getData("text/siyuan");
+            if (text) {
+                text = protyle.lute.BlockDOM2Content(text);
+            } else {
+                text = event.clipboardData.getData("text/plain");
+            }
+            // 阻止右键复制菜单报错
+            setTimeout(function () {
+                document.execCommand("insertText", false, replaceFileName(text));
+            }, 0);
             this.rename(protyle);
         });
         this.editElement.addEventListener("click", () => {
@@ -55,6 +65,11 @@ export class Title {
         this.editElement.addEventListener("input", (event: InputEvent) => {
             if (event.isComposing) {
                 return;
+            }
+            if (this.editElement.textContent === "") {
+                this.editElement.querySelectorAll("br").forEach(item => {
+                    item.remove();
+                });
             }
             this.rename(protyle);
         });
@@ -220,10 +235,17 @@ export class Title {
                 accelerator: "⌘V",
                 click: async () => {
                     focusByRange(getEditorRange(this.editElement));
-                    // 不能使用 execCommand https://github.com/siyuan-note/siyuan/issues/7045
-                    const text = await readText();
-                    document.execCommand("insertText", false, replaceFileName(text));
-                    this.rename(protyle);
+                    if (document.queryCommandSupported("paste")) {
+                        document.execCommand("paste");
+                    } else {
+                        try {
+                            const text = await readText();
+                            document.execCommand("insertText", false, replaceFileName(text));
+                            this.rename(protyle);
+                        } catch (e) {
+                            console.log(e);
+                        }
+                    }
                 }
             }).element);
             window.siyuan.menus.menu.append(new MenuItem({
@@ -339,7 +361,7 @@ export class Title {
         }
         this.element.querySelector(".protyle-attr").innerHTML = nodeAttrHTML;
         if (response.data.refCount !== 0) {
-            this.element.querySelector(".protyle-attr").insertAdjacentHTML("beforeend", `<div class="protyle-attr--refcount popover__block" data-defids='${JSON.stringify([protyle.block.rootID])}' data-id='${JSON.stringify(response.data.refIDs)}'>${response.data.refCount}</div>`);
+            this.element.querySelector(".protyle-attr").insertAdjacentHTML("beforeend", `<div class="protyle-attr--refcount popover__block">${response.data.refCount}</div>`);
         }
         // 存在设置新建文档名模板，不能使用 Untitled 进行判断，https://ld246.com/article/1649301009888
         if (this.editElement && new Date().getTime() - dayjs(response.data.id.split("-")[0]).toDate().getTime() < 2000) {

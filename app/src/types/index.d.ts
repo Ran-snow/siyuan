@@ -198,9 +198,8 @@ interface Window {
         changeStatusBarColor(color: string, mode: number): void
         writeClipboard(text: string): void
         writeHTMLClipboard(text: string, html: string): void
-        writeImageClipboard(uri: string): void
         readClipboard(): string
-        getBlockURL(): string
+        returnDesktop(): void
     }
 
     Protyle: import("../protyle/method").default
@@ -218,7 +217,12 @@ interface Window {
     destroyTheme(): Promise<void>
 }
 
-interface filesPath {
+interface IRefDefs {
+    refID: string,
+    defIDs?: string[]
+}
+
+interface IFilesPath {
     notebookId: string,
     openPaths: string[]
 }
@@ -235,7 +239,7 @@ interface ISaveLayout {
     name: string,
     layout: IObject
     time: number
-    filesPaths: filesPath[]
+    filesPaths: IFilesPath[]
 }
 
 interface IWorkspace {
@@ -431,6 +435,7 @@ interface ISiyuan {
         }[]
     },
     dragElement?: HTMLElement,
+    currentDragOverTabHeadersElement?: HTMLElement
     layout?: {
         layout?: import("../layout").Layout,
         centerLayout?: import("../layout").Layout,
@@ -876,7 +881,8 @@ interface IAVCellValue {
     mAsset?: IAVCellAssetValue[]
     block?: {
         content: string,
-        id?: string
+        id?: string,
+        icon?: string
     }
     url?: {
         content: string

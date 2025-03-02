@@ -21,7 +21,6 @@ export class Options {
         classes: {
             preview: "",
         },
-        debugger: Constants.NODE_ENV === "development",
         hint: {
             delay: 200,
             emoji: {
@@ -89,7 +88,7 @@ export class Options {
         toolbar: Constants.PROTYLE_TOOLBAR,
         typewriterMode: false,
         upload: {
-            max: 1024 * 1024 * 1024 * 4,
+            max: 1024 * 1024 * 1024 * 8,
             url: Constants.UPLOAD_ADDRESS,
             extraData: {},
             fieldName: "file[]",

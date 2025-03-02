@@ -61,7 +61,9 @@ export const scrollEvent = (protyle: IProtyle, element: HTMLElement) => {
         }
         if (protyle.wysiwyg.element.getAttribute("data-top") || protyle.block.showAll ||
             (protyle.scroll && protyle.scroll.element.classList.contains("fn__none")) || !protyle.scroll ||
-            protyle.scroll.lastScrollTop === element.scrollTop || protyle.scroll.lastScrollTop === -1) {
+            protyle.scroll.lastScrollTop === element.scrollTop || protyle.scroll.lastScrollTop === -1 ||
+            // 移动端跳转的时候会设置 wysiwyg.element.innerHTML = "";
+            !protyle.wysiwyg.element.firstElementChild) {
             return;
         }
         if (protyle.scroll.lastScrollTop - element.scrollTop > 0) {
@@ -69,7 +71,7 @@ export const scrollEvent = (protyle: IProtyle, element: HTMLElement) => {
             if (element.scrollTop < element.clientHeight &&
                 protyle.wysiwyg.element.firstElementChild.getAttribute("data-eof") !== "1") {
                 // 禁用滚动时会产生抖动 https://ld246.com/article/1666717094418
-                protyle.contentElement.style.width = (protyle.contentElement.clientWidth) + "px";
+                protyle.contentElement.style.width = (protyle.contentElement.offsetWidth) + "px";
                 protyle.contentElement.style.overflow = "hidden";
                 protyle.wysiwyg.element.setAttribute("data-top", element.scrollTop.toString());
                 fetchPost("/api/filetree/getDoc", {

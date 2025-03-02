@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -77,6 +78,13 @@ func extensionCopy(c *gin.Context) {
 				continue
 			}
 		}
+		if strings.Contains(oName, "%") {
+			unescaped, _ := url.PathUnescape(oName)
+			if "" != unescaped {
+				oName = unescaped
+			}
+		}
+
 		u, _ := url.Parse(oName)
 		if "" == u.Path {
 			continue
@@ -97,21 +105,21 @@ func extensionCopy(c *gin.Context) {
 			break
 		}
 
-		ext := path.Ext(fName)
-		originalExt := ext
+		fName = util.FilterUploadFileName(fName)
+		ext := util.Ext(fName)
 		if "" == ext || strings.Contains(ext, "!") {
 			// 改进浏览器剪藏扩展转换本地图片后缀 https://github.com/siyuan-note/siyuan/issues/7467
 			if mtype := mimetype.Detect(data); nil != mtype {
 				ext = mtype.Extension()
+				fName += ext
 			}
 		}
 		if "" == ext && bytes.HasPrefix(data, []byte("<svg ")) && bytes.HasSuffix(data, []byte("</svg>")) {
 			ext = ".svg"
+			fName += ext
 		}
 
-		fName = fName[0 : len(fName)-len(originalExt)]
-		fName = util.FilterUploadFileName(fName)
-		fName = fName + "-" + ast.NewNodeID() + ext
+		fName = util.AssetName(fName)
 		writePath := filepath.Join(assets, fName)
 		if err = filelock.WriteFile(writePath, data); err != nil {
 			ret.Code = -1
@@ -123,12 +131,7 @@ func extensionCopy(c *gin.Context) {
 	}
 
 	luteEngine := util.NewLute()
-	luteEngine.SetSup(true)
-	luteEngine.SetSub(true)
-	luteEngine.SetMark(true)
-	luteEngine.SetGFMStrikethrough(true)
-	luteEngine.SetInlineAsterisk(true)
-	luteEngine.SetInlineUnderscore(true)
+	luteEngine.SetHTMLTag2TextMark(true)
 	var md string
 	var withMath bool
 	if nil != form.Value["href"] {
@@ -182,6 +185,14 @@ func extensionCopy(c *gin.Context) {
 
 	var tree *parse.Tree
 	if "" == md {
+		// 通过正则将 <iframe>.*</iframe> 标签中间包含的换行去掉
+		regx, _ := regexp.Compile(`(?i)<iframe[^>]*>([\s\S]*?)<\/iframe>`)
+		dom = regx.ReplaceAllStringFunc(dom, func(s string) string {
+			s = strings.ReplaceAll(s, "\n", "")
+			s = strings.ReplaceAll(s, "\r", "")
+			return s
+		})
+
 		tree, withMath = model.HTML2Tree(dom, luteEngine)
 		if nil == tree {
 			md, withMath, _ = model.HTML2Markdown(dom, luteEngine)

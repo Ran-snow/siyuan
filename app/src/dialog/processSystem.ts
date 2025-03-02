@@ -169,25 +169,22 @@ export const setDefRefCount = (data: {
     "refCount": number,
     "rootRefCount": number,
     "rootID": string
-    refIDs: string[]
 }) => {
     getAllEditor().forEach(editor => {
-        if (data.rootID === data.blockID && editor.protyle.block.rootID === data.rootID) {
-            if (!editor.protyle.title) {
-                return;
-            }
+        if (editor.protyle.block.rootID === data.rootID && editor.protyle.title) {
             const attrElement = editor.protyle.title.element.querySelector(".protyle-attr");
             const countElement = attrElement.querySelector(".protyle-attr--refcount");
             if (countElement) {
-                if (data.refCount === 0) {
+                if (data.rootRefCount === 0) {
                     countElement.remove();
                 } else {
-                    countElement.textContent = data.refCount.toString();
-                    countElement.setAttribute("data-id", data.refIDs.toString());
+                    countElement.textContent = data.rootRefCount.toString();
                 }
-            } else if (data.refCount > 0) {
-                attrElement.insertAdjacentHTML("beforeend", `<div class="protyle-attr--refcount popover__block" data-defids="[&quot;${data.blockID}&quot;]" data-id="${data.refIDs.toString()}" style="">${data.refCount}</div>`);
+            } else if (data.rootRefCount > 0) {
+                attrElement.insertAdjacentHTML("beforeend", `<div class="protyle-attr--refcount popover__block">${data.rootRefCount}</div>`);
             }
+        }
+        if (data.rootID === data.blockID) {
             return;
         }
         // 不能对比 rootId，否则嵌入块中的锚文本无法更新
@@ -310,6 +307,11 @@ export const exitSiYuan = async () => {
             }
         } else if (response.code === 2) { // 提示新安装包
             hideMessage();
+
+            if ("std" === window.siyuan.config.system.container) {
+                ipcRenderer.send(Constants.SIYUAN_SHOW_WINDOW);
+            }
+
             confirmDialog(window.siyuan.languages.tip, response.msg, () => {
                 fetchPost("/api/system/exit", {
                     force: true,

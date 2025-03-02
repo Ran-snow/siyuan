@@ -18,6 +18,7 @@ package model
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"math"
@@ -147,7 +148,14 @@ func ClearWorkspaceHistory() (err error) {
 	return
 }
 
-func GetDocHistoryContent(historyPath, keyword string) (id, rootID, content string, isLargeDoc bool, err error) {
+func GetDocHistoryContent(historyPath, keyword string, highlight bool) (id, rootID, content string, isLargeDoc bool, err error) {
+	if !util.IsAbsPathInWorkspace(historyPath) {
+		msg := "Path [" + historyPath + "] is not in workspace"
+		logging.LogErrorf(msg)
+		err = errors.New(msg)
+		return
+	}
+
 	if !gulu.File.IsExist(historyPath) {
 		logging.LogWarnf("doc history [%s] not exist", historyPath)
 		return
@@ -163,8 +171,7 @@ func GetDocHistoryContent(historyPath, keyword string) (id, rootID, content stri
 	luteEngine := NewLute()
 	historyTree, err := filesys.ParseJSONWithoutFix(data, luteEngine.ParseOptions)
 	if err != nil {
-		logging.LogErrorf("parse tree from file [%s] failed, remove it", historyPath)
-		os.RemoveAll(historyPath)
+		logging.LogErrorf("parse tree from file [%s] failed: %s", historyPath, err)
 		return
 	}
 	id = historyTree.Root.ID
@@ -185,7 +192,7 @@ func GetDocHistoryContent(historyPath, keyword string) (id, rootID, content stri
 			n.RemoveIALAttr("heading-fold")
 			n.RemoveIALAttr("fold")
 
-			if 0 < len(keywords) {
+			if highlight && 0 < len(keywords) {
 				if markReplaceSpan(n, &unlinks, keywords, search.MarkDataType, luteEngine) {
 					return ast.WalkContinue
 				}
@@ -238,7 +245,7 @@ func RollbackDocHistory(boxID, historyPath string) (err error) {
 		}
 	}
 
-	destPath, parentHPath, err = getRollbackDockPath(boxID, historyPath)
+	destPath, parentHPath, err = getRollbackDockPath(boxID, workingDoc)
 	if err != nil {
 		return
 	}
@@ -323,7 +330,7 @@ func RollbackDocHistory(boxID, historyPath string) (err error) {
 			if nil != defTree {
 				defNode := treenode.GetNodeInTree(defTree, defID)
 				if nil != defNode {
-					task.AppendAsyncTaskWithDelay(task.SetDefRefCount, 1*time.Second, refreshRefCount, defTree.ID, defNode.ID)
+					task.AppendAsyncTaskWithDelay(task.SetDefRefCount, util.SQLFlushInterval, refreshRefCount, defTree.ID, defNode.ID)
 				}
 			}
 		}
@@ -331,10 +338,15 @@ func RollbackDocHistory(boxID, historyPath string) (err error) {
 	return nil
 }
 
-func getRollbackDockPath(boxID, historyPath string) (destPath, parentHPath string, err error) {
-	baseName := filepath.Base(historyPath)
-	parentID := path.Base(filepath.Dir(historyPath))
-	parentWorkingDoc := treenode.GetBlockTree(parentID)
+func getRollbackDockPath(boxID string, workingDoc *treenode.BlockTree) (destPath, parentHPath string, err error) {
+	var parentID, baseName string
+	var parentWorkingDoc *treenode.BlockTree
+	if nil != workingDoc {
+		baseName = path.Base(workingDoc.Path)
+		parentID = path.Base(path.Dir(workingDoc.Path))
+		parentWorkingDoc = treenode.GetBlockTree(parentID)
+	}
+
 	if nil != parentWorkingDoc {
 		// 父路径如果是文档，则恢复到父路径下
 		parentDir := strings.TrimSuffix(parentWorkingDoc.Path, ".sy")
