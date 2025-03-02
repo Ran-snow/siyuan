@@ -36,10 +36,7 @@ func IsValidRole(role Role, roles []Role) bool {
 }
 
 func IsReadOnlyRole(role Role) bool {
-	return IsValidRole(role, []Role{
-		RoleReader,
-		RoleVisitor,
-	})
+	return false
 }
 
 func GetGinContextRole(c *gin.Context) Role {
