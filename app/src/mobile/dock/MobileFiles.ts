@@ -1,8 +1,4 @@
-import {
-    hasClosestByClassName,
-    hasClosestByTag,
-    hasTopClosestByTag
-} from "../../protyle/util/hasClosest";
+import {hasClosestByClassName, hasClosestByTag, hasTopClosestByTag} from "../../protyle/util/hasClosest";
 import {escapeHtml} from "../../util/escape";
 import {Model} from "../../layout/Model";
 import {Constants} from "../../constants";
@@ -217,6 +213,13 @@ export class MobileFiles extends Model {
                             } else if (type === "more-root") {
                                 initNavigationMenu(app, target.parentElement);
                                 window.siyuan.menus.menu.fullscreen("bottom");
+                            } else if (type === "addLocal") {
+                                fetchPost("/api/filetree/moveLocalShorthands", {
+                                    "notebook": notebookId
+                                });
+                                this.element.querySelectorAll('[data-type="addLocal"]').forEach(item => {
+                                    item.remove();
+                                });
                             }
                         }
                         if (type === "more-file") {
@@ -293,7 +296,12 @@ export class MobileFiles extends Model {
                     currentPath = dirname + ".sy";
                 }
             } else {
-                liElement.querySelector(".fn__hidden")?.classList.remove("fn__hidden");
+                const hiddenElement = liElement.querySelector(".fn__hidden");
+                if (hiddenElement) {
+                    hiddenElement.classList.remove("fn__hidden");
+                } else {
+                    this.getLeaf(liElement, notebookId, true);
+                }
                 break;
             }
         }

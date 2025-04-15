@@ -86,7 +86,7 @@ export const getContentByInlineHTML = (range: Range, cb: (content: string) => vo
 };
 
 export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
-    editorElement.addEventListener("keydown", (event: KeyboardEvent & { target: HTMLElement }) => {
+    editorElement.addEventListener("keydown", async (event: KeyboardEvent & { target: HTMLElement }) => {
         if (event.target.localName === "protyle-html" || event.target.localName === "input") {
             event.stopPropagation();
             return;
@@ -701,6 +701,13 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                                     scrollCenter(protyle, foldElement);
                                     event.stopPropagation();
                                     event.preventDefault();
+                                } else {
+                                    // 修正光标上移至 \n 结尾的块时落点错误 https://github.com/siyuan-note/siyuan/issues/14443
+                                    const prevEditableElement = getContenteditableElement(previousElement) as HTMLElement;
+                                    if (prevEditableElement &&  prevEditableElement.lastChild.nodeType === 3 &&
+                                        prevEditableElement.lastChild.textContent.endsWith("\n")) {
+                                        prevEditableElement.lastChild.textContent = prevEditableElement.lastChild.textContent.replace(/\n$/, "");
+                                    }
                                 }
                             }
                         }
@@ -853,11 +860,7 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                     }
                     // 需使用 innerText，否则 br 无法传唤为 /n https://github.com/siyuan-note/siyuan/issues/12066
                     // 段末反向删除 https://github.com/siyuan-note/insider/issues/274
-                    if (position.end === editElement.innerText.length ||
-                        // 软换行后删除 https://github.com/siyuan-note/siyuan/issues/11118
-                        (position.end === editElement.innerText.length - 1 && editElement.innerText.endsWith("\n")) ||
-                        // 图片后无内容删除 https://github.com/siyuan-note/siyuan/issues/11868
-                        (position.end === editElement.innerText.length - 1 && editElement.innerText.endsWith(Constants.ZWSP))) {
+                    if (isEndOfBlock(range)) {
                         const nextElement = getNextBlock(getTopAloneElement(nodeElement));
                         if (nextElement) {
                             const nextRange = focusBlock(nextElement);
@@ -934,11 +937,25 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                         event.preventDefault();
                         return;
                     }
-                    // 图片后为空格，在空格后删除 https://github.com/siyuan-note/siyuan/issues/13949
                     if (range.startOffset === 1 && range.startContainer.textContent.length === 1) {
+                        // 图片后为空格，在空格后删除 https://github.com/siyuan-note/siyuan/issues/13949
                         const rangePreviousElement = hasPreviousSibling(range.startContainer) as HTMLElement;
                         const rangeNextElement = hasNextSibling(range.startContainer) as HTMLElement;
                         if (rangePreviousElement && rangePreviousElement.nodeType === 1 && rangePreviousElement.classList.contains("img") &&
+                            rangeNextElement && rangeNextElement.nodeType === 1 && rangeNextElement.classList.contains("img")) {
+                            const wbrElement = document.createElement("wbr");
+                            range.insertNode(wbrElement);
+                            const oldHTML = nodeElement.outerHTML;
+                            wbrElement.previousSibling.textContent = Constants.ZWSP;
+                            updateTransaction(protyle, nodeElement.getAttribute("data-node-id"), nodeElement.outerHTML, oldHTML);
+                            focusByWbr(nodeElement, range);
+                            event.preventDefault();
+                            return;
+                        }
+                        // 图片前有一个字符，在字符后删除
+                        if (position.start === 1 &&
+                            range.startContainer.textContent !== Constants.ZWSP &&  // 如果为 zwsp 需前移光标
+                            !rangePreviousElement &&
                             rangeNextElement && rangeNextElement.nodeType === 1 && rangeNextElement.classList.contains("img")) {
                             const wbrElement = document.createElement("wbr");
                             range.insertNode(wbrElement);
@@ -1239,12 +1256,12 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                     !protyle.toolbar.subElement.classList.contains("fn__none")) {
                     hideElements(["toolbar", "hint", "util"], protyle);
                     protyle.hint.enableExtend = false;
+                } else if (!window.siyuan.menus.menu.element.classList.contains("fn__none")) {
+                    // 防止 ESC 时选中当前块
+                    window.siyuan.menus.menu.remove(true);
                 } else if (nodeElement.classList.contains("protyle-wysiwyg--select")) {
                     hideElements(["select"], protyle);
                     countBlockWord([], protyle.block.rootID);
-                } else if (!window.siyuan.menus.menu.element.classList.contains("fn__none")) {
-                    // 防止 ESC 时选中当前块
-                    window.siyuan.menus.menu.remove();
                 } else {
                     hideElements(["select"], protyle);
                     range.collapse(false);
@@ -1648,7 +1665,7 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                     updateTransaction(protyle, selectsElement[0].getAttribute("data-node-id"), selectsElement[0].outerHTML, oldHTML);
                 } else {
                     range.insertNode(document.createElement("wbr"));
-                    const sbData = cancelSB(protyle, selectsElement[0]);
+                    const sbData = await cancelSB(protyle, selectsElement[0]);
                     transaction(protyle, sbData.doOperations, sbData.undoOperations);
                     focusByWbr(protyle.wysiwyg.element, range);
                 }
@@ -1677,7 +1694,7 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                     updateTransaction(protyle, selectsElement[0].getAttribute("data-node-id"), selectsElement[0].outerHTML, oldHTML);
                 } else {
                     range.insertNode(document.createElement("wbr"));
-                    const sbData = cancelSB(protyle, selectsElement[0]);
+                    const sbData = await cancelSB(protyle, selectsElement[0]);
                     transaction(protyle, sbData.doOperations, sbData.undoOperations);
                     focusByWbr(protyle.wysiwyg.element, range);
                 }
@@ -1712,6 +1729,28 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
             return;
         }
 
+        if (!event.repeat && matchHotKey(window.siyuan.config.keymap.editor.general.openInNewTab.custom, event)) {
+            event.preventDefault();
+            event.stopPropagation();
+            const blockPanel = window.siyuan.blockPanels.find(item => {
+                if (item.element.contains(nodeElement)) {
+                    return true;
+                }
+            });
+            const id = nodeElement.getAttribute("data-node-id");
+            checkFold(id, (zoomIn, action) => {
+                openFileById({
+                    app: protyle.app,
+                    id,
+                    action,
+                    zoomIn,
+                    openNewTab: true
+                });
+                blockPanel.destroy();
+            });
+            return;
+        }
+
         // tab 需等待 list 和 table 处理完成
         if (event.key === "Tab" && isNotCtrl(event) && !event.altKey) {
             event.preventDefault();
@@ -1727,11 +1766,11 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                 const oldHTML = nodeElement.outerHTML;
                 let text = "";
                 if (!event.shiftKey) {
-                    range.extractContents().textContent.split("\n").forEach((item) => {
+                    range.extractContents().textContent.split("\n").forEach((item: string) => {
                         text += tabSpace + item + "\n";
                     });
                 } else {
-                    range.extractContents().textContent.split("\n").forEach((item) => {
+                    range.extractContents().textContent.split("\n").forEach((item: string) => {
                         if (item.startsWith(tabSpace)) {
                             text += item.replace(tabSpace, "") + "\n";
                         } else {
