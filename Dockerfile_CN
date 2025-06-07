@@ -1,4 +1,4 @@
-FROM node:latest as NODE_BUILD
+FROM node:latest as node_build
 WORKDIR /go/src/github.com/siyuan-note/siyuan/
 ADD . /go/src/github.com/siyuan-note/siyuan/
 RUN npm install --registry https://registry.npm.taobao.org -g pnpm 
@@ -6,9 +6,9 @@ RUN cd app && ELECTRON_MIRROR=https://cnpmjs.org/mirrors/electron/ pnpm install 
 RUN cd app && pnpm --registry https://registry.npm.taobao.org install
 RUN cd app && pnpm run build
 
-FROM golang:alpine as GO_BUILD
+FROM golang:alpine as go_build
 WORKDIR /go/src/github.com/siyuan-note/siyuan/
-COPY --from=NODE_BUILD /go/src/github.com/siyuan-note/siyuan/ /go/src/github.com/siyuan-note/siyuan/
+COPY --from=node_build /go/src/github.com/siyuan-note/siyuan/ /go/src/github.com/siyuan-note/siyuan/
 ENV GO111MODULE=on
 ENV CGO_ENABLED=1
 ENV GOPROXY=https://goproxy.cn,direct
@@ -29,7 +29,7 @@ LABEL org.opencontainers.image.description="Some free change base on siyuan-note
 LABEL org.opencontainers.image.licenses="AGPL-3.0"
 
 WORKDIR /opt/siyuan/
-COPY --from=GO_BUILD /opt/siyuan/ /opt/siyuan/
+COPY --from=go_build /opt/siyuan/ /opt/siyuan/
 RUN addgroup --gid 1000 siyuan && \
     adduser --uid 1000 --ingroup siyuan --disabled-password siyuan && \
     apk add --no-cache ca-certificates tzdata && \

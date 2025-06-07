@@ -1,4 +1,4 @@
-FROM node:21 AS NODE_BUILD
+FROM node:21 AS node_build
 
 WORKDIR /go/src/github.com/siyuan-note/siyuan/
 ADD . /go/src/github.com/siyuan-note/siyuan/
@@ -18,9 +18,9 @@ RUN apt-get purge -y jq
 RUN apt-get autoremove -y
 RUN rm -rf /var/lib/apt/lists/*
 
-FROM golang:1.24-alpine AS GO_BUILD
+FROM golang:1.24-alpine AS go_build
 WORKDIR /go/src/github.com/siyuan-note/siyuan/
-COPY --from=NODE_BUILD /go/src/github.com/siyuan-note/siyuan/ /go/src/github.com/siyuan-note/siyuan/
+COPY --from=node_build /go/src/github.com/siyuan-note/siyuan/ /go/src/github.com/siyuan-note/siyuan/
 ENV GO111MODULE=on
 ENV CGO_ENABLED=1
 RUN apk add --no-cache gcc musl-dev && \
@@ -40,7 +40,7 @@ LABEL org.opencontainers.image.description="Some free change base on siyuan-note
 LABEL org.opencontainers.image.licenses="AGPL-3.0"
 
 WORKDIR /opt/siyuan/
-COPY --from=GO_BUILD /opt/siyuan/ /opt/siyuan/
+COPY --from=go_build /opt/siyuan/ /opt/siyuan/
 
 RUN apk add --no-cache ca-certificates tzdata su-exec && \
     chmod +x /opt/siyuan/entrypoint.sh
