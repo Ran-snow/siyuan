@@ -296,7 +296,7 @@
   &__icon {
     height: 80px;
     width: 80px;
-    transition: var(--b3-transition);
+    transition: opacity 150ms linear;
     cursor: pointer;
     font-size: 68px; // 🔪显示不完整
     line-height: 80px;
@@ -407,12 +407,6 @@
       outline: none;
     }
   }
-}
-
-.protyle-cursor {
-  position: absolute;
-  right: 0;
-  top: 0;
 }
 
 table[contenteditable="false"] + .protyle-action__table > .table__resize {

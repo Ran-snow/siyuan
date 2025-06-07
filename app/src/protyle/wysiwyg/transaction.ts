@@ -268,14 +268,14 @@ const updateEmbed = (protyle: IProtyle, operation: IOperation) => {
 
     const updateHTML = (item: Element, html: string) => {
         const tempElement = document.createElement("template");
-        tempElement.innerHTML = html;
+        tempElement.innerHTML = protyle.lute.SpinBlockDOM(html);
         tempElement.content.querySelectorAll('[contenteditable="true"]').forEach(editItem => {
             editItem.setAttribute("contenteditable", "false");
         });
         tempElement.content.querySelectorAll(".protyle-wysiwyg--select").forEach(selectItem => {
             selectItem.classList.remove("protyle-wysiwyg--select");
         });
-        const wbrElement = tempElement.querySelector("wbr");
+        const wbrElement = tempElement.content.querySelector("wbr");
         if (wbrElement) {
             wbrElement.remove();
         }
@@ -482,18 +482,20 @@ export const onTransaction = (protyle: IProtyle, operation: IOperation, isUndo: 
         // 缩放后仅更新局部 https://github.com/siyuan-note/siyuan/issues/14326
         if (updateElements.length === 0) {
             const newUpdateElement = protyle.wysiwyg.element.querySelector("[data-node-id]");
-            const newUpdateId = newUpdateElement.getAttribute("data-node-id");
-            const tempElement = document.createElement("template");
-            tempElement.innerHTML = operation.data;
-            const newTempElement = tempElement.content.querySelector(`[data-node-id="${newUpdateId}"]`);
-            if (newTempElement) {
-                updateElements.push(newUpdateElement);
-                operation.data = newTempElement.outerHTML;
-                operation.id = newUpdateId;
-                // https://github.com/siyuan-note/siyuan/issues/14326#issuecomment-2746140335
-                for (let i = 1; i < protyle.wysiwyg.element.childElementCount; i++) {
-                    protyle.wysiwyg.element.childNodes[i].remove();
-                    i--;
+            if (newUpdateElement) {
+                const newUpdateId = newUpdateElement.getAttribute("data-node-id");
+                const tempElement = document.createElement("template");
+                tempElement.innerHTML = operation.data;
+                const newTempElement = tempElement.content.querySelector(`[data-node-id="${newUpdateId}"]`);
+                if (newTempElement) {
+                    updateElements.push(newUpdateElement);
+                    operation.data = newTempElement.outerHTML;
+                    operation.id = newUpdateId;
+                    // https://github.com/siyuan-note/siyuan/issues/14326#issuecomment-2746140335
+                    for (let i = 1; i < protyle.wysiwyg.element.childElementCount; i++) {
+                        protyle.wysiwyg.element.childNodes[i].remove();
+                        i--;
+                    }
                 }
             }
         }
@@ -580,19 +582,17 @@ export const onTransaction = (protyle: IProtyle, operation: IOperation, isUndo: 
                     enableProtyle(protyle);
                 }
             }
-            if (data.new.icon !== data.old.icon) {
+            if (data.new.icon !== data.old.icon ||
+                data.new["title-img"] !== data.old["title-img"] ||
+                data.new.tags !== data.old.tags && protyle.background) {
                 /// #if MOBILE
-                if (window.siyuan.mobile.editor.protyle.background.ial.icon !== data.new.icon) {
-                    window.siyuan.mobile.editor.protyle.background.ial.icon = data.new.icon;
-                    window.siyuan.mobile.editor.protyle.background.render(window.siyuan.mobile.editor.protyle.background.ial, window.siyuan.mobile.editor.protyle.block.rootID);
-                }
-                /// #else
-                if (protyle.background && protyle.background.ial.icon !== data.new.icon) {
-                    protyle.background.ial.icon = data.new.icon;
-                    protyle.background.render(protyle.background.ial, protyle.block.rootID);
-                    protyle.model?.parent.setDocIcon(data.new.icon);
-                }
+                protyle = window.siyuan.mobile.editor.protyle;
                 /// #endif
+                protyle.background.ial.icon = data.new.icon;
+                protyle.background.ial.tags = data.new.tags;
+                protyle.background.ial["title-img"] = data.new["title-img"];
+                protyle.background.render(protyle.background.ial, protyle.block.rootID);
+                protyle.model?.parent.setDocIcon(data.new.icon);
             }
             return;
         }
@@ -621,14 +621,16 @@ export const onTransaction = (protyle: IProtyle, operation: IOperation, isUndo: 
                     }, 450);
                 }
             });
+            const attrElements = item.querySelectorAll(".protyle-attr");
+            const attrElement = attrElements[attrElements.length - 1];
             if (data.new["custom-avs"] && !data.new["av-names"]) {
-                nodeAttrHTML += item.lastElementChild.querySelector(".protyle-attr--av")?.outerHTML || "";
+                nodeAttrHTML += attrElement.querySelector(".protyle-attr--av")?.outerHTML || "";
             }
-            const refElement = item.lastElementChild.querySelector(".protyle-attr--refcount");
+            const refElement = attrElement.querySelector(".protyle-attr--refcount");
             if (refElement) {
                 nodeAttrHTML += refElement.outerHTML;
             }
-            item.lastElementChild.innerHTML = nodeAttrHTML + Constants.ZWSP;
+            attrElement.innerHTML = nodeAttrHTML + Constants.ZWSP;
         });
         return;
     }
@@ -1036,7 +1038,7 @@ export const turnsIntoTransaction = (options: {
     let html = "";
     const doOperations: IOperation[] = [];
     const undoOperations: IOperation[] = [];
-    const tempElement = document.createElement("div");
+    let previousId: string;
     selectsElement.forEach((item, index) => {
         if ((options.type === "Blocks2Ps" || options.type === "Blocks2Hs") &&
             item.getAttribute("data-type") === "NodeHeading" && item.getAttribute("fold") === "1") {
@@ -1047,64 +1049,91 @@ export const turnsIntoTransaction = (options: {
         item.removeAttribute("select-end");
         html += item.outerHTML;
         const id = item.getAttribute("data-node-id");
-        undoOperations.push({
-            action: "update",
-            id,
-            data: item.outerHTML,
-            parentID: item.parentElement?.getAttribute("data-node-id") || options.protyle.block.parentID || options.protyle.block.rootID,
-            previousID: undoOperations[undoOperations.length - 1]?.id || item.previousElementSibling?.getAttribute("data-node-id")
-        });
 
+        const tempElement = document.createElement("template");
         if (!options.isContinue) {
             // @ts-ignore
-            item.outerHTML = options.protyle.lute[options.type](item.outerHTML, options.level);
-        } else {
-            if (index === selectsElement.length - 1) {
-                // @ts-ignore
-                tempElement.innerHTML = options.protyle.lute[options.type](html, options.level);
-                item.outerHTML = tempElement.innerHTML;
+            const newHTML = options.protyle.lute[options.type](item.outerHTML, options.level);
+            tempElement.innerHTML = newHTML;
+
+            if (!tempElement.content.querySelector(`[data-node-id="${id}"]`)) {
+                undoOperations.push({
+                    action: "insert",
+                    id,
+                    previousID: previousId || item.previousElementSibling?.getAttribute("data-node-id"),
+                    data: item.outerHTML,
+                    parentID: item.parentElement?.getAttribute("data-node-id") || options.protyle.block.parentID || options.protyle.block.rootID,
+                });
+                Array.from(tempElement.content.children).forEach((tempItem: HTMLElement) => {
+                    const tempItemId = tempItem.getAttribute("data-node-id");
+                    doOperations.push({
+                        action: "insert",
+                        id: tempItemId,
+                        previousID: tempItem.previousElementSibling?.getAttribute("data-node-id") || item.previousElementSibling?.getAttribute("data-node-id"),
+                        data: tempItem.outerHTML,
+                        parentID: item.parentElement?.getAttribute("data-node-id") || options.protyle.block.parentID || options.protyle.block.rootID,
+                    });
+                    undoOperations.splice(0, 0, {
+                        action: "delete",
+                        id: tempItemId,
+                    });
+                });
+                doOperations.push({
+                    action: "delete",
+                    id,
+                });
+                if (item.isSameNode(selectsElement[index + 1]?.previousElementSibling)) {
+                    previousId = id;
+                } else {
+                    previousId = undefined;
+                }
             } else {
-                item.remove();
+                undoOperations.push({
+                    action: "update",
+                    id,
+                    data: item.outerHTML,
+                });
+                doOperations.push({
+                    action: "update",
+                    id,
+                    data: newHTML
+                });
             }
-        }
-    });
-    undoOperations.forEach(item => {
-        const nodeElement = options.protyle.wysiwyg.element.querySelector(`[data-node-id="${item.id}"]`);
-        if (!nodeElement) {
-            item.action = "insert";
-            doOperations.push({
-                action: "delete",
-                id: item.id,
-            });
+            item.outerHTML = newHTML;
         } else {
-            doOperations.push({
-                action: "update",
-                id: item.id,
-                data: nodeElement.outerHTML
-            });
-        }
-    });
-    Array.from(tempElement.children).forEach(item => {
-        const itemId = item.getAttribute("data-node-id");
-        let find = false;
-        undoOperations.find(undoItem => {
-            if (itemId === undoItem.id) {
-                find = true;
-                return true;
-            }
-        });
-        if (!find) {
-            doOperations.push({
+            undoOperations.push({
                 action: "insert",
-                id: itemId,
-                previousID: item.previousElementSibling?.getAttribute("data-node-id") || undoOperations[0].previousID,
+                id,
+                previousID: doOperations[doOperations.length - 1]?.id || item.previousElementSibling?.getAttribute("data-node-id"),
                 data: item.outerHTML,
                 parentID: item.parentElement?.getAttribute("data-node-id") || options.protyle.block.parentID || options.protyle.block.rootID,
             });
-            undoOperations.splice(0, 0, {
+            doOperations.push({
                 action: "delete",
-                id: itemId,
+                id,
             });
+            if (index === selectsElement.length - 1) {
+                // @ts-ignore
+                const newHTML = options.protyle.lute[options.type](html, options.level);
+                tempElement.innerHTML = newHTML;
+                Array.from(tempElement.content.children).forEach((tempItem: HTMLElement) => {
+                    const tempItemId = tempItem.getAttribute("data-node-id");
+                    doOperations.push({
+                        action: "insert",
+                        id: tempItemId,
+                        previousID: tempItem.previousElementSibling?.getAttribute("data-node-id") || item.previousElementSibling?.getAttribute("data-node-id"),
+                        data: tempItem.outerHTML,
+                        parentID: item.parentElement?.getAttribute("data-node-id") || options.protyle.block.parentID || options.protyle.block.rootID,
+                    });
+                    undoOperations.splice(0, 0, {
+                        action: "delete",
+                        id: tempItemId,
+                    });
+                });
+                item.outerHTML = newHTML;
+            } else {
+                item.remove();
+            }
         }
     });
     transaction(options.protyle, doOperations, undoOperations);
