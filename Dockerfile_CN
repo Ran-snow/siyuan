@@ -48,12 +48,12 @@ ENTRYPOINT ["/opt/siyuan/kernel"]
 
 # git branch -v
 # git pull siyuan master:siyuan
-# git tag 2.10.13
+# git tag 3.1.32
 # git push
 # git push --tag
 
-# git tag -d 2.10.13
-# git push origin :refs/tags/2.10.13
+# git tag -d 3.1.32
+# git push origin :refs/tags/3.1.32
 
 # docker run \
 #   --name siyuan_001 \
