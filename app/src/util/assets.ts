@@ -169,8 +169,6 @@ export const initAssets = () => {
     });
 };
 
-=======
->>>>>>> a2a678c5fbb560e3b265dc2c690f568bcf15a663
 export const setInlineStyle = async (set = true) => {
     const height = Math.floor(window.siyuan.config.editor.fontSize * 1.625);
     let style;
