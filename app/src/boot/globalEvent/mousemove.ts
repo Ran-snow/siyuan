@@ -111,7 +111,7 @@ export const windowMouseMove = (event: MouseEvent, mouseIsEnter: boolean) => {
             const allModels = getAllModels();
             let findNode = false;
             allModels.editor.find(item => {
-                if (item.editor.protyle.wysiwyg.element.isSameNode(eventPath0)) {
+                if (item.editor.protyle.wysiwyg.element === eventPath0) {
                     item.editor.protyle.gutter.render(item.editor.protyle, targetBlockElement, item.editor.protyle.wysiwyg.element, rowElement);
                     findNode = true;
                     return true;
@@ -134,7 +134,7 @@ export const windowMouseMove = (event: MouseEvent, mouseIsEnter: boolean) => {
             if (!findNode) {
                 allModels.backlink.find(item => {
                     item.editors.find(eItem => {
-                        if (eItem.protyle.wysiwyg.element.isSameNode(eventPath0)) {
+                        if (eItem.protyle.wysiwyg.element === eventPath0) {
                             eItem.protyle.gutter.render(eItem.protyle, targetBlockElement, eItem.protyle.wysiwyg.element, rowElement);
                             findNode = true;
                             return true;
@@ -224,8 +224,8 @@ export const windowMouseMove = (event: MouseEvent, mouseIsEnter: boolean) => {
     const blockElement = hasClosestByClassName(target, "table");
     if (blockElement && blockElement.style.cursor !== "col-resize" && !hasClosestByClassName(blockElement, "protyle-wysiwyg__embed")) {
         const cellElement = (hasClosestByTag(target, "TH") || hasClosestByTag(target, "TD")) as HTMLTableCellElement;
-        if (cellElement) {
-            const tableElement = blockElement.querySelector("table");
+        const tableElement = blockElement.querySelector("table");
+        if (cellElement && tableElement && tableElement.getAttribute("contenteditable") === "true") {
             const tableHeight = blockElement.querySelector("table").clientHeight;
             const resizeElement = blockElement.querySelector(".table__resize");
             if (blockElement.style.textAlign === "center" || blockElement.style.textAlign === "right") {

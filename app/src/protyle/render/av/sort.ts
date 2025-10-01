@@ -109,7 +109,7 @@ export const getSortsHTML = (columns: IAVColumn[], sorts: IAVSort[]) => {
     sorts.forEach((item: IAVSort) => {
         html += `<button draggable="true" class="b3-menu__item" data-id="${item.column}">
     <svg class="b3-menu__icon fn__grab"><use xlink:href="#iconDrag"></use></svg>
-    <select class="b3-select" style="margin: 4px 0">
+    <select class="b3-select fn__flex-1" style="margin: 4px 0">
         ${genSortItem(item.column)}
     </select>
     <span class="fn__space"></span>
@@ -133,7 +133,7 @@ ${html}
     <svg class="b3-menu__icon"><use xlink:href="#iconAdd"></use></svg>
     <span class="b3-menu__label">${window.siyuan.languages.new}</span>
 </button>
-<button class="b3-menu__item${html ? "" : " fn__none"}" data-type="removeSorts">
+<button class="b3-menu__item b3-menu__item--warning${html ? "" : " fn__none"}" data-type="removeSorts">
     <svg class="b3-menu__icon"><use xlink:href="#iconTrashcan"></use></svg>
     <span class="b3-menu__label">${window.siyuan.languages.delete}</span>
 </button>

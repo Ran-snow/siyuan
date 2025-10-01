@@ -134,7 +134,7 @@ export class Toolbar {
         // shift+方向键或三击选中，不同的块 https://github.com/siyuan-note/siyuan/issues/3891
         const startElement = hasClosestBlock(range.startContainer);
         const endElement = hasClosestBlock(range.endContainer);
-        if (startElement && endElement && !startElement.isSameNode(endElement)) {
+        if (startElement && endElement && startElement !== endElement) {
             if (event) { // 在 keyup 中使用 shift+方向键选中
                 if (event.key === "ArrowLeft") {
                     this.range = setLastNodeRange(getContenteditableElement(startElement), range, false);
@@ -212,7 +212,7 @@ export class Toolbar {
         if (types.length === 0 && (!endElement || endElement.nodeType === 3)) {
             return [];
         }
-        if (endElement && !["DIV", "TD", "TH", "TR"].includes(endElement.tagName) && !startElement.isSameNode(endElement)) {
+        if (endElement && !["DIV", "TD", "TH", "TR"].includes(endElement.tagName) && startElement !== endElement) {
             types = types.concat((endElement.getAttribute("data-type") || "").split(" "));
         }
         range.cloneContents().childNodes.forEach((item: HTMLElement) => {
@@ -240,7 +240,7 @@ export class Toolbar {
             return;
         }
         // 三击后还没有重新纠正 range 时使用快捷键标记会导致异常 https://github.com/siyuan-note/siyuan/issues/7068
-        if (!nodeElement.isSameNode(endElement)) {
+        if (nodeElement !== endElement) {
             this.range = setLastNodeRange(getContenteditableElement(nodeElement), this.range, false);
         }
 
@@ -250,10 +250,13 @@ export class Toolbar {
                 rangeTypes = rangeTypes.concat((item.getAttribute("data-type") || "").split(" "));
             }
         });
-        const rangeStartNextSibling = hasNextSibling(this.range.startContainer);
-        const isSameNode = this.range.startContainer.isSameNode(this.range.endContainer) ||
-            (rangeStartNextSibling && rangeStartNextSibling.isSameNode(this.range.endContainer) &&
-                this.range.startContainer.parentElement.isSameNode(this.range.endContainer.parentElement));
+        let rangeStartNextSibling = hasNextSibling(this.range.startContainer);
+        while (rangeStartNextSibling && rangeStartNextSibling.nodeType === 1 && (rangeStartNextSibling as HTMLElement).tagName === "BR") {
+            rangeStartNextSibling = hasNextSibling(rangeStartNextSibling);
+        }
+        const isSameNode = this.range.startContainer === this.range.endContainer ||
+            (rangeStartNextSibling && rangeStartNextSibling === this.range.endContainer &&
+                this.range.startContainer.parentElement === this.range.endContainer.parentElement);
         if (this.range.startContainer.nodeType === 3 && this.range.startContainer.parentElement.tagName === "SPAN" &&
             isSameNode &&
             this.range.startOffset > -1 && this.range.endOffset <= this.range.endContainer.textContent.length) {
@@ -284,7 +287,7 @@ export class Toolbar {
             }
         }
         // https://github.com/siyuan-note/siyuan/issues/14534
-        if (rangeTypes.includes("text") && type === "text" && textObj && this.range.startContainer.nodeType === 3 && this.range.startContainer.isSameNode(this.range.endContainer)) {
+        if (rangeTypes.includes("text") && type === "text" && textObj && this.range.startContainer.nodeType === 3 && this.range.startContainer === this.range.endContainer) {
             const selectParentElement = this.range.startContainer.parentElement;
             if (selectParentElement && hasSameTextStyle(null, selectParentElement, textObj)) {
                 return;
@@ -300,18 +303,21 @@ export class Toolbar {
             if (this.range.startOffset > -1 && this.range.endOffset <= this.range.endContainer.textContent.length) {
                 needWrapTarget = this.range.startContainer.parentElement;
             }
+            const startPreviousSibling = hasPreviousSibling(this.range.startContainer);
+            const endNextSibling = hasNextSibling(this.range.endContainer);
             if ((
                     this.range.startOffset !== 0 ||
                     // https://github.com/siyuan-note/siyuan/issues/14869
-                    (this.range.startOffset === 0 && this.range.startContainer.previousSibling?.nodeType === 3 &&
-                        this.range.startContainer.previousSibling.parentElement.isSameNode(this.range.startContainer.parentElement))
+                    (this.range.startOffset === 0 && startPreviousSibling &&
+                        (startPreviousSibling.nodeType === 3 || (startPreviousSibling as HTMLElement).tagName === "BR") &&
+                        this.range.startContainer.previousSibling.parentElement === this.range.startContainer.parentElement)
                 ) && (
                     this.range.endOffset !== this.range.endContainer.textContent.length ||
                     // https://github.com/siyuan-note/siyuan/issues/14869#issuecomment-2911553387
                     (
-                        this.range.endOffset === this.range.endContainer.textContent.length &&
-                        this.range.endContainer.nextSibling?.nodeType === 3 &&
-                        this.range.endContainer.nextSibling.parentElement.isSameNode(this.range.endContainer.parentElement)
+                        this.range.endOffset === this.range.endContainer.textContent.length && endNextSibling &&
+                        (endNextSibling.nodeType === 3 || (endNextSibling as HTMLElement).tagName === "BR") &&
+                        this.range.endContainer.nextSibling.parentElement === this.range.endContainer.parentElement
                     )
                 ) &&
                 !(this.range.startOffset === 1 && this.range.startContainer.textContent.startsWith(Constants.ZWSP))) {
@@ -372,7 +378,7 @@ export class Toolbar {
                 }
             }
             if (emptyNode && emptyNode.nodeType !== 3 && emptyNode.textContent.replace(Constants.ZWSP, "") === "" &&
-                !["TD", "TH"].includes(emptyNode.tagName)) {
+                !["TD", "TH", "BR"].includes(emptyNode.tagName)) {
                 emptyNode.remove();
             }
         }
@@ -706,7 +712,8 @@ export class Toolbar {
                         } else {
                             // 测试不存在 https://ld246.com/article/1664454663564 情况，故移除引用合并限制
                             // 搜索结果引用被高亮隔断需进行合并 https://github.com/siyuan-note/siyuan/issues/7588
-                            currentNode.textContent = previousElement.textContent + currentNode.textContent;
+                            // textContent：防止赋值后 \n 转换为 br 导致后续 this.range.setStart 报错；innerText：获取 br 的 \n， https://github.com/siyuan-note/siyuan/issues/15968
+                            currentNode.textContent = previousElement.innerText + currentNode.innerText;
                             // 如果为备注时，合并备注内容
                             if (currentType.includes("inline-memo")) {
                                 currentNode.setAttribute("data-inline-memo-content", (previousElement.getAttribute("data-inline-memo-content") || "") +
@@ -722,7 +729,7 @@ export class Toolbar {
                                 endOffset = previousElement.textContent.length;
                                 if (!startContainer) {
                                     startContainer = currentNode;
-                                } else if (startContainer.isSameNode(previousElement)) {
+                                } else if (startContainer === previousElement) {
                                     startContainer = currentNode;
                                 }
                             }
@@ -901,15 +908,15 @@ export class Toolbar {
             this.subElement.style.padding = "0";
         }
         this.subElement.innerHTML = `<div ${(isPin && this.subElement.firstElementChild.getAttribute("data-drag") === "true") ? 'data-drag="true"' : ""}><div class="block__icons block__icons--menu fn__flex" style="border-radius: var(--b3-border-radius-b) var(--b3-border-radius-b) 0 0;">
-    <span class="fn__flex-1 resize__move">
+    <span class="fn__flex-1 resize__move" style="line-height: 24px;">
         ${title}
     </span>
     <span class="fn__space"></span>
     <button data-type="refresh" class="block__icon block__icon--show b3-tooltips b3-tooltips__nw${(isPin && !this.subElement.querySelector('[data-type="refresh"]').classList.contains("block__icon--active")) ? "" : " block__icon--active"}${types.includes("NodeBlockQueryEmbed") ? " fn__none" : ""}" aria-label="${window.siyuan.languages.refresh}"><svg><use xlink:href="#iconRefresh"></use></svg></button>
     <span class="fn__space"></span>
-    <button data-type="before" class="block__icon block__icon--show b3-tooltips b3-tooltips__nw${protyle.disabled ? " fn__none" : ""}" aria-label="${window.siyuan.languages["insert-before"]}"><svg><use xlink:href="#iconBefore"></use></svg></button>
+    <button data-type="before" class="block__icon block__icon--show b3-tooltips b3-tooltips__nw${protyle.disabled ? " fn__none" : ""}" aria-label="${window.siyuan.languages.insertBefore}"><svg><use xlink:href="#iconBefore"></use></svg></button>
     <span class="fn__space${protyle.disabled ? " fn__none" : ""}"></span>
-    <button data-type="after" class="block__icon block__icon--show b3-tooltips b3-tooltips__nw${protyle.disabled ? " fn__none" : ""}" aria-label="${window.siyuan.languages["insert-after"]}"><svg><use xlink:href="#iconAfter"></use></svg></button>
+    <button data-type="after" class="block__icon block__icon--show b3-tooltips b3-tooltips__nw${protyle.disabled ? " fn__none" : ""}" aria-label="${window.siyuan.languages.insertAfter}"><svg><use xlink:href="#iconAfter"></use></svg></button>
     <span class="fn__space${protyle.disabled ? " fn__none" : ""}"></span>
     <button data-type="export" class="block__icon block__icon--show b3-tooltips b3-tooltips__nw" aria-label="${window.siyuan.languages.export} ${window.siyuan.languages.image}"><svg><use xlink:href="#iconImage"></use></svg></button>
     <span class="fn__space"></span>
@@ -1227,7 +1234,16 @@ export class Toolbar {
         window.siyuan.menus.menu.remove();
         this.range = getEditorRange(nodeElement);
         let html = `<div class="b3-list-item">${window.siyuan.languages.clear}</div>`;
-        const hljsLanguages = Constants.ALIAS_CODE_LANGUAGES.concat(window.hljs?.listLanguages() ?? []).sort();
+        let hljsLanguages = Constants.ALIAS_CODE_LANGUAGES.concat(window.hljs?.listLanguages() ?? []).sort();
+
+        const eventDetail = {languages: hljsLanguages};
+        if (protyle.app && protyle.app.plugins) {
+            protyle.app.plugins.forEach((plugin: any) => {
+                plugin.eventBus.emit("code-language-update", eventDetail);
+            });
+        }
+
+        hljsLanguages = eventDetail.languages;
         hljsLanguages.forEach((item, index) => {
             html += `<div class="b3-list-item${index === 0 ? " b3-list-item--focus" : ""}">${item}</div>`;
         });
@@ -1264,23 +1280,34 @@ export class Toolbar {
             let html = "";
             // sort
             let matchInput = false;
-            matchLanguages.sort((a, b) => {
-                if (a.startsWith(lowerCaseValue) && b.startsWith(lowerCaseValue)) {
-                    if (a.length < b.length) {
+            if (lowerCaseValue) {
+                matchLanguages.sort((a, b) => {
+                    if (a.startsWith(lowerCaseValue) && b.startsWith(lowerCaseValue)) {
+                        if (a.length < b.length) {
+                            return -1;
+                        } else if (a.length === b.length) {
+                            return 0;
+                        } else {
+                            return 1;
+                        }
+                    } else if (a.startsWith(lowerCaseValue)) {
                         return -1;
-                    } else if (a.length === b.length) {
-                        return 0;
-                    } else {
+                    } else if (b.startsWith(lowerCaseValue)) {
                         return 1;
+                    } else {
+                        return 0;
                     }
-                } else if (a.startsWith(lowerCaseValue)) {
-                    return -1;
-                } else if (b.startsWith(lowerCaseValue)) {
-                    return 1;
-                } else {
-                    return 0;
-                }
-            }).forEach((item) => {
+                });
+            }
+
+            const eventDetail = {languages: matchLanguages};
+            if (protyle.app && protyle.app.plugins) {
+                protyle.app.plugins.forEach((plugin: any) => {
+                    plugin.eventBus.emit("code-language-update", eventDetail);
+                });
+            }
+
+            matchLanguages.forEach((item) => {
                 if (inputElement.value === item) {
                     matchInput = true;
                 }
@@ -1291,10 +1318,10 @@ export class Toolbar {
             }
             html = `<div class="b3-list-item">${window.siyuan.languages.clear}</div>` + html;
             listElement.innerHTML = html;
-            if (listElement.firstElementChild.nextElementSibling) {
-                listElement.firstElementChild.nextElementSibling.classList.add("b3-list-item--focus");
+            if (listElement.childElementCount > 2 && !matchInput && inputElement.value.trim()) {
+                listElement.firstElementChild.nextElementSibling.nextElementSibling.classList.add("b3-list-item--focus");
             } else {
-                listElement.firstElementChild.classList.add("b3-list-item--focus");
+                listElement.firstElementChild.nextElementSibling.classList.add("b3-list-item--focus");
             }
             event.stopPropagation();
         });
@@ -1398,7 +1425,16 @@ export class Toolbar {
             }, (response) => {
                 let searchHTML = "";
                 response.data.blocks.forEach((item: { path: string, content: string }, index: number) => {
-                    searchHTML += `<div data-value="${item.path}" class="b3-list-item${index === 0 ? " b3-list-item--focus" : ""}">${item.content}</div>`;
+                    searchHTML += `<div data-value="${item.path}" class="b3-list-item--hide-action b3-list-item${index === 0 ? " b3-list-item--focus" : ""}">
+<span class="b3-list-item__text">${item.content}</span>`;
+                    /// #if !BROWSER
+                    searchHTML += `<span data-type="open" class="b3-list-item__action b3-tooltips b3-tooltips__w" aria-label="${window.siyuan.languages.showInFolder}">
+    <svg><use xlink:href="#iconFolder"></use></svg>
+</span>`;
+                    /// #endif
+                    searchHTML += `<span data-type="remove" class="b3-list-item__action b3-tooltips b3-tooltips__w" aria-label="${window.siyuan.languages.remove}">
+    <svg><use xlink:href="#iconTrashcan"></use></svg>
+</span></div>`;
                 });
                 listElement.innerHTML = searchHTML || `<li class="b3-list--empty">${window.siyuan.languages.emptyContent}</li>`;
                 const currentPath = response.data.blocks[0]?.path;
@@ -1735,15 +1771,26 @@ ${item.name}
         }
     }
 
-    private updateLanguage(languageElement: HTMLElement[], protyle: IProtyle, selectedLang: string) {
+    private updateLanguage(languageElements: HTMLElement[], protyle: IProtyle, selectedLang: string) {
         const currentLang = selectedLang === window.siyuan.languages.clear ? "" : selectedLang;
+
+        if (protyle.app && protyle.app.plugins) {
+            protyle.app.plugins.forEach((plugin: any) => {
+                plugin.eventBus.emit("code-language-change", {
+                    language: currentLang,
+                    languageElements,
+                    protyle: protyle
+                });
+            });
+        }
+
         if (!Constants.SIYUAN_RENDER_CODE_LANGUAGES.includes(currentLang)) {
             window.siyuan.storage[Constants.LOCAL_CODELANG] = currentLang;
             setStorageVal(Constants.LOCAL_CODELANG, window.siyuan.storage[Constants.LOCAL_CODELANG]);
         }
         const doOperations: IOperation[] = [];
         const undoOperations: IOperation[] = [];
-        languageElement.forEach(item => {
+        languageElements.forEach(item => {
             const nodeElement = hasClosestBlock(item);
             if (nodeElement) {
                 const id = nodeElement.getAttribute("data-node-id");

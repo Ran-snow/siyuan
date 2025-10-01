@@ -218,6 +218,10 @@ func InitConf() {
 	Conf.FileTree.DocCreateSavePath = util.TrimSpaceInPath(Conf.FileTree.DocCreateSavePath)
 	Conf.FileTree.RefCreateSavePath = util.TrimSpaceInPath(Conf.FileTree.RefCreateSavePath)
 	util.UseSingleLineSave = Conf.FileTree.UseSingleLineSave
+	if 2 > Conf.FileTree.LargeFileWarningSize {
+		Conf.FileTree.LargeFileWarningSize = 8
+	}
+	util.LargeFileWarningSize = Conf.FileTree.LargeFileWarningSize
 
 	util.CurrentCloudRegion = Conf.CloudRegion
 
@@ -255,6 +259,9 @@ func InitConf() {
 	}
 	if 1 > Conf.Editor.HistoryRetentionDays {
 		Conf.Editor.HistoryRetentionDays = 30
+	}
+	if 3650 < Conf.Editor.HistoryRetentionDays {
+		Conf.Editor.HistoryRetentionDays = 3650
 	}
 	if conf.MinDynamicLoadBlocks > Conf.Editor.DynamicLoadBlocks {
 		Conf.Editor.DynamicLoadBlocks = conf.MinDynamicLoadBlocks
@@ -689,7 +696,9 @@ func Close(force, setCurrentWorkspace bool, execInstallPkg int) (exitCode int) {
 	go func() {
 		time.Sleep(500 * time.Millisecond)
 		logging.LogInfof("exited kernel")
-		util.WebSocketServer.Close()
+		if nil != util.WebSocketServer {
+			util.WebSocketServer.Close()
+		}
 		util.HttpServing = false
 		os.Exit(logging.ExitCodeOk)
 	}()
@@ -870,7 +879,7 @@ func InitBoxes() {
 		box.UpdateHistoryGenerated() // 初始化历史生成时间为当前时间
 
 		if !initialized {
-			index(box.ID)
+			indexBox(box.ID)
 		}
 	}
 
