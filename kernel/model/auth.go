@@ -128,7 +128,7 @@ func ParseJWT(tokenString string) (*jwt.Token, error) {
 	// REF: https://golang-jwt.github.io/jwt/usage/parse/
 	return jwt.Parse(
 		tokenString,
-		func(token *jwt.Token) (interface{}, error) {
+		func(token *jwt.Token) (any, error) {
 			return jwtKey, nil
 		},
 		jwt.WithIssuer(iss),
@@ -158,4 +158,16 @@ func GetClaimRole(claims jwt.MapClaims) Role {
 		return Role(role.(float64))
 	}
 	return RoleVisitor
+}
+
+// IsPublishServiceToken 检查 token 是否来自发布服务
+func IsPublishServiceToken(token *jwt.Token) bool {
+	if token == nil || !token.Valid {
+		return false
+	}
+	claims := GetTokenClaims(token)
+	if tokenIssuer, ok := claims["iss"].(string); ok {
+		return tokenIssuer == iss
+	}
+	return false
 }

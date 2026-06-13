@@ -17,6 +17,7 @@
 package av
 
 import (
+	"reflect"
 	"strings"
 	"time"
 
@@ -146,19 +147,17 @@ func (value *Value) Filter(filter *ViewFilter, attrView *AttributeView, itemID s
 		return true
 	}
 
-	switch filter.Operator {
-	case FilterOperatorIsEmpty:
-		return value.IsEmpty()
-	case FilterOperatorIsNotEmpty:
-		return !value.IsEmpty()
+	if "" == filter.Qualifier {
+		switch filter.Operator {
+		case FilterOperatorIsEmpty:
+			return value.IsEmpty()
+		case FilterOperatorIsNotEmpty:
+			return !value.IsEmpty()
+		}
 	}
 
 	// 单独处理汇总
 	if nil != value.Rollup && KeyTypeRollup == value.Type && nil != filter.Value && KeyTypeRollup == filter.Value.Type && nil != filter.Value.Rollup {
-		if 1 > len(filter.Value.Rollup.Contents) {
-			return true
-		}
-
 		key, _ := attrView.GetKey(value.KeyID)
 		if nil == key {
 			return false
@@ -194,12 +193,88 @@ func (value *Value) Filter(filter *ViewFilter, attrView *AttributeView, itemID s
 
 		switch filter.Qualifier {
 		case FilterQuantifierUndefined, FilterQuantifierAny:
+			if FilterOperatorIsEmpty == filter.Operator {
+				if 1 > len(value.Rollup.Contents) {
+					return true
+				}
+
+				if len(value.Rollup.Contents) < len(relVal.Relation.Contents) { // 说明汇总的目标字段存在空值
+					return true
+				}
+
+				for _, c := range value.Rollup.Contents {
+					if v := c.GetValByType(c.Type); nil == v || reflect.ValueOf(v).IsNil() {
+						return true
+					}
+				}
+				return false
+			} else if FilterOperatorIsNotEmpty == filter.Operator {
+				if 1 > len(value.Rollup.Contents) {
+					return false
+				}
+
+				for _, c := range value.Rollup.Contents {
+					if v := c.GetValByType(c.Type); nil != v && !reflect.ValueOf(v).IsNil() {
+						return true
+					}
+				}
+				return false
+			}
+
+			if 1 > len(filter.Value.Rollup.Contents) {
+				return true
+			}
+
+			if v := filter.Value.GetValByType(filter.Value.Rollup.Contents[0].Type); nil == v || reflect.ValueOf(v).IsNil() {
+				return true
+			}
+
 			for _, content := range value.Rollup.Contents {
 				if content.filter(filter.Value.Rollup.Contents[0], filter.RelativeDate, filter.RelativeDate2, filter.Operator) {
 					return true
 				}
 			}
 		case FilterQuantifierAll:
+			if FilterOperatorIsEmpty == filter.Operator {
+				if 1 > len(value.Rollup.Contents) {
+					return true
+				}
+
+				if len(value.Rollup.Contents) < len(relVal.Relation.Contents) {
+					return false
+				}
+
+				for _, c := range value.Rollup.Contents {
+					if v := c.GetValByType(c.Type); nil != v && !reflect.ValueOf(v).IsNil() {
+						return false
+					}
+				}
+				return true
+			} else if FilterOperatorIsNotEmpty == filter.Operator {
+				if 1 > len(value.Rollup.Contents) {
+					return false
+				}
+
+				if len(value.Rollup.Contents) < len(relVal.Relation.Contents) {
+					return false
+				}
+
+				for _, c := range value.Rollup.Contents {
+					if v := c.GetValByType(c.Type); nil == v || reflect.ValueOf(v).IsNil() {
+						return false
+					}
+				}
+				return true
+			}
+
+			if 1 > len(filter.Value.Rollup.Contents) {
+				return true
+			}
+
+			if v := filter.Value.GetValByType(filter.Value.Rollup.Contents[0].Type); nil == v || reflect.ValueOf(v).IsNil() {
+				return true
+			}
+
 			for _, content := range value.Rollup.Contents {
 				if !content.filter(filter.Value.Rollup.Contents[0], filter.RelativeDate, filter.RelativeDate2, filter.Operator) {
 					return false
@@ -207,6 +282,42 @@ func (value *Value) Filter(filter *ViewFilter, attrView *AttributeView, itemID s
 			}
 			return true
 		case FilterQuantifierNone:
+			if FilterOperatorIsEmpty == filter.Operator {
+				if 1 > len(value.Rollup.Contents) {
+					return false
+				}
+
+				if len(value.Rollup.Contents) < len(relVal.Relation.Contents) {
+					return true
+				}
+
+				for _, c := range value.Rollup.Contents {
+					if v := c.GetValByType(c.Type); nil == v || reflect.ValueOf(v).IsNil() {
+						return false
+					}
+				}
+				return true
+			} else if FilterOperatorIsNotEmpty == filter.Operator {
+				if 1 > len(value.Rollup.Contents) {
+					return true
+				}
+
+				for _, c := range value.Rollup.Contents {
+					if v := c.GetValByType(c.Type); nil != v && !reflect.ValueOf(v).IsNil() {
+						return false
+					}
+				}
+				return true
+			}
+
+			if 1 > len(filter.Value.Rollup.Contents) {
+				return true
+			}
+
+			if v := filter.Value.GetValByType(filter.Value.Rollup.Contents[0].Type); nil == v || reflect.ValueOf(v).IsNil() {
+				return true
+			}
+
 			for _, content := range value.Rollup.Contents {
 				if content.filter(filter.Value.Rollup.Contents[0], filter.RelativeDate, filter.RelativeDate2, filter.Operator) {
 					return false
@@ -254,61 +365,142 @@ func (value *Value) Filter(filter *ViewFilter, attrView *AttributeView, itemID s
 
 	// 单独处理资源
 	if nil != value.MAsset && KeyTypeMAsset == value.Type && nil != filter.Value && KeyTypeMAsset == filter.Value.Type {
-		if 1 > len(filter.Value.MAsset) {
-			return true
-		}
-
 		key, _ := attrView.GetKey(value.KeyID)
 		if nil == key {
 			return false
 		}
 
+		var filterContent string
+		if 1 <= len(filter.Value.MAsset) {
+			filterContent = filter.Value.MAsset[0].Content
+		}
+
 		switch filter.Qualifier {
 		case FilterQuantifierUndefined, FilterQuantifierAny:
+			if FilterOperatorIsEmpty == filter.Operator {
+				if 1 > len(value.MAsset) {
+					return true
+				}
+
+				for _, asset := range value.MAsset {
+					if "" == strings.TrimSpace(asset.Name) && "" == strings.TrimSpace(asset.Content) {
+						return true
+					}
+				}
+				return false
+			} else if FilterOperatorIsNotEmpty == filter.Operator {
+				if 1 > len(value.MAsset) {
+					return false
+				}
+
+				for _, asset := range value.MAsset {
+					if "" != strings.TrimSpace(asset.Name) || "" != strings.TrimSpace(asset.Content) {
+						return true
+					}
+				}
+				return false
+			}
+
+			if nil == filter.Value || 1 > len(filter.Value.MAsset) {
+				return true
+			}
+
 			for _, asset := range value.MAsset {
 				switch asset.Type {
 				case AssetTypeFile:
-					if filterTextContent(filter.Operator, asset.Name, filter.Value.MAsset[0].Content) ||
-						filterTextContent(filter.Operator, asset.Content, filter.Value.MAsset[0].Content) {
+					if filterTextContent(filter.Operator, asset.Name, filterContent) ||
+						filterTextContent(filter.Operator, asset.Content, filterContent) {
 						return true
 					}
 				case AssetTypeImage:
-					if filterTextContent(filter.Operator, asset.Content, filter.Value.MAsset[0].Content) {
+					if filterTextContent(filter.Operator, asset.Content, filterContent) {
 						return true
 					}
 				}
 			}
 		case FilterQuantifierAll:
+			if FilterOperatorIsEmpty == filter.Operator {
+				if 1 > len(value.MAsset) {
+					return true
+				}
+
+				for _, asset := range value.MAsset {
+					if "" != strings.TrimSpace(asset.Name) || "" != strings.TrimSpace(asset.Content) {
+						return false
+					}
+				}
+				return true
+			} else if FilterOperatorIsNotEmpty == filter.Operator {
+				if 1 > len(value.MAsset) {
+					return false
+				}
+
+				for _, asset := range value.MAsset {
+					if "" == strings.TrimSpace(asset.Name) && "" == strings.TrimSpace(asset.Content) {
+						return false
+					}
+				}
+				return true
+			}
+
+			if nil == filter.Value || 1 > len(filter.Value.MAsset) {
+				return true
+			}
+
 			for _, asset := range value.MAsset {
 				switch asset.Type {
 				case AssetTypeFile:
-					if !filterTextContent(filter.Operator, asset.Name, filter.Value.MAsset[0].Content) &&
-						!filterTextContent(filter.Operator, asset.Content, filter.Value.MAsset[0].Content) {
+					if !filterTextContent(filter.Operator, asset.Name, filterContent) &&
+						!filterTextContent(filter.Operator, asset.Content, filterContent) {
 						return false
 					}
 				case AssetTypeImage:
-					if !filterTextContent(filter.Operator, asset.Content, filter.Value.MAsset[0].Content) {
+					if !filterTextContent(filter.Operator, asset.Content, filterContent) {
 						return false
 					}
 				}
 			}
 			return true
 		case FilterQuantifierNone:
+			if FilterOperatorIsEmpty == filter.Operator {
+				if 1 > len(value.MAsset) {
+					return false
+				}
+
+				for _, asset := range value.MAsset {
+					if "" == strings.TrimSpace(asset.Name) && "" == strings.TrimSpace(asset.Content) {
+						return false
+					}
+				}
+				return true
+			} else if FilterOperatorIsNotEmpty == filter.Operator {
+				if 1 > len(value.MAsset) {
+					return true
+				}
+
+				for _, asset := range value.MAsset {
+					if "" != strings.TrimSpace(asset.Name) || "" != strings.TrimSpace(asset.Content) {
+						return false
+					}
+				}
+				return true
+			}
+
+			if nil == filter.Value || 1 > len(filter.Value.MAsset) {
+				return true
+			}
+
 			for _, asset := range value.MAsset {
 				switch asset.Type {
 				case AssetTypeFile:
-					if "" != strings.TrimSpace(asset.Name) {
-						if filterTextContent(filter.Operator, asset.Name, filter.Value.MAsset[0].Content) {
-							return false
-						}
+					if filterTextContent(filter.Operator, asset.Name, filterContent) {
+						return false
 					}
-					if "" != strings.TrimSpace(asset.Content) {
-						if filterTextContent(filter.Operator, asset.Content, filter.Value.MAsset[0].Content) {
-							return false
-						}
+					if filterTextContent(filter.Operator, asset.Content, filterContent) {
+						return false
 					}
 				case AssetTypeImage:
-					if filterTextContent(filter.Operator, asset.Content, filter.Value.MAsset[0].Content) {
+					if filterTextContent(filter.Operator, asset.Content, filterContent) {
 						return false
 					}
 				}
@@ -373,12 +565,12 @@ func (value *Value) filter(other *Value, relativeDate, relativeDate2 *RelativeDa
 				relativeTimeStart, relativeTimeEnd := calcRelativeTimeRegion(relativeDate.Count, relativeDate.Unit, relativeDate.Direction)
 				relativeTimeStart2, relativeTimeEnd2 := calcRelativeTimeRegion(relativeDate2.Count, relativeDate2.Unit, relativeDate2.Direction)
 				return filterRelativeTime(value.Date.Content, value.Date.IsNotEmpty, operator, relativeTimeStart, relativeTimeEnd, relativeDate.Direction, relativeTimeStart2, relativeTimeEnd2, relativeDate2.Direction)
-			} else { // 使用具体时间比较
-				if nil == other.Date {
-					return true
-				}
-				return filterTime(value.Date.Content, value.Date.IsNotEmpty, other.Date.Content, other.Date.Content2, operator)
 			}
+			// 使用具体时间比较
+			if nil == other.Date {
+				return true
+			}
+			return filterTime(value.Date.Content, value.Date.IsNotEmpty, other.Date.Content, other.Date.Content2, operator)
 		}
 	case KeyTypeCreated:
 		if nil != value.Created {
@@ -386,12 +578,12 @@ func (value *Value) filter(other *Value, relativeDate, relativeDate2 *RelativeDa
 				relativeTimeStart, relativeTimeEnd := calcRelativeTimeRegion(relativeDate.Count, relativeDate.Unit, relativeDate.Direction)
 				relativeTimeStart2, relativeTimeEnd2 := calcRelativeTimeRegion(relativeDate2.Count, relativeDate2.Unit, relativeDate2.Direction)
 				return filterRelativeTime(value.Created.Content, true, operator, relativeTimeStart, relativeTimeEnd, relativeDate.Direction, relativeTimeStart2, relativeTimeEnd2, relativeDate2.Direction)
-			} else { // 使用具体时间比较
-				if nil == other.Created {
-					return true
-				}
-				return filterTime(value.Created.Content, value.Created.IsNotEmpty, other.Created.Content, other.Created.Content2, operator)
 			}
+			// 使用具体时间比较
+			if nil == other.Created {
+				return true
+			}
+			return filterTime(value.Created.Content, value.Created.IsNotEmpty, other.Created.Content, other.Created.Content2, operator)
 		}
 	case KeyTypeUpdated:
 		if nil != value.Updated {
@@ -399,13 +591,13 @@ func (value *Value) filter(other *Value, relativeDate, relativeDate2 *RelativeDa
 				relativeTimeStart, relativeTimeEnd := calcRelativeTimeRegion(relativeDate.Count, relativeDate.Unit, relativeDate.Direction)
 				relativeTimeStart2, relativeTimeEnd2 := calcRelativeTimeRegion(relativeDate2.Count, relativeDate2.Unit, relativeDate2.Direction)
 				return filterRelativeTime(value.Updated.Content, true, operator, relativeTimeStart, relativeTimeEnd, relativeDate.Direction, relativeTimeStart2, relativeTimeEnd2, relativeDate2.Direction)
-			} else { // 使用具体时间比较
-				if nil == other.Updated {
-					return true
-				}
-
-				return filterTime(value.Updated.Content, value.Updated.IsNotEmpty, other.Updated.Content, other.Updated.Content2, operator)
 			}
+			// 使用具体时间比较
+			if nil == other.Updated {
+				return true
+			}
+
+			return filterTime(value.Updated.Content, value.Updated.IsNotEmpty, other.Updated.Content, other.Updated.Content2, operator)
 		}
 	case KeyTypeSelect, KeyTypeMSelect:
 		if nil != value.MSelect {
@@ -557,32 +749,50 @@ func filterTextContent(operator FilterOperator, valueContent, otherValueContent 
 		if "" == strings.TrimSpace(otherValueContent) {
 			return true
 		}
-		return valueContent == otherValueContent
+		if util.SearchCaseSensitive {
+			return valueContent == otherValueContent
+		}
+		return strings.EqualFold(valueContent, otherValueContent)
 	case FilterOperatorIsNotEqual:
 		if "" == strings.TrimSpace(otherValueContent) {
 			return true
 		}
-		return valueContent != otherValueContent
+		if util.SearchCaseSensitive {
+			return valueContent != otherValueContent
+		}
+		return !strings.EqualFold(valueContent, otherValueContent)
 	case FilterOperatorContains:
 		if "" == strings.TrimSpace(otherValueContent) {
 			return true
 		}
-		return strings.Contains(valueContent, otherValueContent)
+		if util.SearchCaseSensitive {
+			return strings.Contains(valueContent, otherValueContent)
+		}
+		return strings.Contains(strings.ToLower(valueContent), strings.ToLower(otherValueContent))
 	case FilterOperatorDoesNotContain:
 		if "" == strings.TrimSpace(otherValueContent) {
 			return true
 		}
-		return !strings.Contains(valueContent, otherValueContent)
+		if util.SearchCaseSensitive {
+			return !strings.Contains(valueContent, otherValueContent)
+		}
+		return !strings.Contains(strings.ToLower(valueContent), strings.ToLower(otherValueContent))
 	case FilterOperatorStartsWith:
 		if "" == strings.TrimSpace(otherValueContent) {
 			return true
 		}
-		return strings.HasPrefix(valueContent, otherValueContent)
+		if util.SearchCaseSensitive {
+			return strings.HasPrefix(valueContent, otherValueContent)
+		}
+		return strings.HasPrefix(strings.ToLower(valueContent), strings.ToLower(otherValueContent))
 	case FilterOperatorEndsWith:
 		if "" == strings.TrimSpace(otherValueContent) {
 			return true
 		}
-		return strings.HasSuffix(valueContent, otherValueContent)
+		if util.SearchCaseSensitive {
+			return strings.HasSuffix(valueContent, otherValueContent)
+		}
+		return strings.HasSuffix(strings.ToLower(valueContent), strings.ToLower(otherValueContent))
 	case FilterOperatorIsEmpty:
 		return "" == strings.TrimSpace(valueContent)
 	case FilterOperatorIsNotEmpty:
@@ -746,10 +956,10 @@ func calcRelativeTimeRegion(count int, unit RelativeDateUnit, direction Relative
 			// 结束时间：今天的 23:59:59.999999999
 			end = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, now.Location())
 		case RelativeDateDirectionAfter:
-			// 开始时间：今天的 23:59:59.999999999
-			start = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, now.Location())
-			// 结束时间：开始时间加上 count 天
-			end = start.AddDate(0, 0, count)
+			// 开始时间：今天的 0 点加上 count 天
+			start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, count)
+			// 结束时间：开始时间的 23:59:59.999999999
+			end = time.Date(start.Year(), start.Month(), start.Day(), 23, 59, 59, 999999999, now.Location())
 		}
 	case RelativeDateUnitWeek:
 		weekday := int(now.Weekday())
@@ -768,10 +978,10 @@ func calcRelativeTimeRegion(count int, unit RelativeDateUnit, direction Relative
 			// 结束时间：本周的周日
 			end = time.Date(now.Year(), now.Month(), now.Day()-weekday+7, 23, 59, 59, 999999999, now.Location())
 		case RelativeDateDirectionAfter:
-			//  开始时间：本周的周日
-			start = time.Date(now.Year(), now.Month(), now.Day()-weekday+7, 23, 59, 59, 999999999, now.Location())
-			// 结束时间：开始时间加上 count*7 天
-			end = start.AddDate(0, 0, count*7)
+			// 开始时间：本周的周一加上 count*7 天
+			start = time.Date(now.Year(), now.Month(), now.Day()-weekday+1, 0, 0, 0, 0, now.Location()).AddDate(0, 0, count*7)
+			// 结束时间：开始时间的周日
+			end = time.Date(start.Year(), start.Month(), start.Day()-int(start.Weekday())+7, 23, 59, 59, 999999999, now.Location())
 		}
 	case RelativeDateUnitMonth:
 		switch direction {
@@ -786,10 +996,10 @@ func calcRelativeTimeRegion(count int, unit RelativeDateUnit, direction Relative
 			// 结束时间：下个月的 1 号减去 1 纳秒
 			end = time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, now.Location()).Add(-time.Nanosecond)
 		case RelativeDateDirectionAfter:
-			// 开始时间：下个月的 1 号减去 1 纳秒
-			start = time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, now.Location()).Add(-time.Nanosecond)
-			// 结束时间：开始时间加上 count 个月
-			end = start.AddDate(0, count, 0)
+			// 开始时间：count 个月后的 1 号
+			start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, count, 0)
+			// 结束时间：开始时间的下个月的 1 号减去 1 纳秒
+			end = time.Date(start.Year(), start.Month()+1, 1, 0, 0, 0, 0, now.Location()).Add(-time.Nanosecond)
 		}
 	case RelativeDateUnitYear:
 		switch direction {
@@ -804,13 +1014,26 @@ func calcRelativeTimeRegion(count int, unit RelativeDateUnit, direction Relative
 			// 结束时间：明年的 1 月 1 号减去 1 纳秒
 			end = time.Date(now.Year()+1, 1, 1, 0, 0, 0, 0, now.Location()).Add(-time.Nanosecond)
 		case RelativeDateDirectionAfter:
-			// 开始时间：今年的 12 月 31 号
-			start = time.Date(now.Year(), 12, 31, 23, 59, 59, 999999999, now.Location())
-			// 结束时间：开始时间加上 count 年
-			end = start.AddDate(count, 0, 0)
+			// 开始时间：count 年后的 1 月 1 号
+			start = time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location()).AddDate(count, 0, 0)
+			// 结束时间：开始时间的 count+1 年的 1 月 1 号减去 1 纳秒
+			end = time.Date(start.Year()+1, 1, 1, 0, 0, 0, 0, now.Location()).Add(-time.Nanosecond)
 		}
 	}
 	return
+}
+
+func (filter *ViewFilter) IsValid() bool {
+	if nil == filter || nil == filter.Value {
+		return false
+	}
+
+	if FilterOperatorIsEmpty != filter.Operator && FilterOperatorIsNotEmpty != filter.Operator {
+		if filter.Value.IsEmpty() && nil == filter.RelativeDate {
+			return false
+		}
+	}
+	return true
 }
 
 func (filter *ViewFilter) GetAffectValue(key *Key, addingBlockID string) (ret *Value) {

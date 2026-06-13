@@ -2,7 +2,7 @@ import {getAllModels} from "../getAll";
 import {Tab} from "../Tab";
 import {Graph} from "./Graph";
 import {Outline} from "./Outline";
-import {fixWndFlex1, getInstanceById, getWndByLayout, saveLayout, switchWnd} from "../util";
+import {fixWndFlex1, getInstanceById, getWndByLayout, saveLayout} from "../util";
 import {getDockByType, resizeTabs} from "../tabUtil";
 import {Backlink} from "./Backlink";
 import {App} from "../../index";
@@ -122,9 +122,14 @@ export const openGraph = async (options: {
     }));
 };
 
-export const openOutline = async (protyle: IProtyle) => {
+export const openOutline = async (options: {
+    app: App,
+    rootId: string,
+    isPreview: boolean,
+    title: string
+}) => {
     const outlinePanel = getAllModels().outline.find(item => {
-        if (item.blockId === protyle.block.rootID && item.type === "local") {
+        if (item.blockId === options.rootId && item.type === "local") {
             item.parent.parent.removeTab(item.parent.id);
             return true;
         }
@@ -140,30 +145,27 @@ export const openOutline = async (protyle: IProtyle) => {
     if (!wnd) {
         wnd = getWndByLayout(window.siyuan.layout.centerLayout);
     }
-    const newWnd = wnd.split("lr");
-    let title = "";
-    if (!protyle.title) {
-        const response = await fetchSyncPost("api/block/getDocInfo", {id: protyle.block.rootID});
-        title = response.data.name || window.siyuan.languages.untitled;
-    } else {
-        title = protyle.title.editElement.textContent || window.siyuan.languages.untitled;
+    const newWnd = wnd.split("lr", false);
+
+    if (!options.title) {
+        const response = await fetchSyncPost("api/block/getDocInfo", {id: options.rootId});
+        options.title = response.data.name || window.siyuan.languages.untitled;
     }
     newWnd.addTab(new Tab({
         icon: "iconAlignCenter",
-        title,
+        title: options.title,
         callback(tab: Tab) {
             tab.addModel(new Outline({
-                app: protyle.app,
+                app: options.app,
                 type: "local",
                 tab,
-                blockId: protyle.block.rootID,
-                isPreview: !protyle.preview.element.classList.contains("fn__none")
+                blockId: options.rootId,
+                isPreview: options.isPreview,
             }));
         }
     }), false, false);
     newWnd.element.style.width = "200px";
     newWnd.element.classList.remove("fn__flex-1");
-    switchWnd(newWnd, wnd);
     fixWndFlex1(newWnd.parent);
     saveLayout();
 };

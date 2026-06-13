@@ -20,8 +20,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"math/rand"
 	"mime"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -30,7 +30,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/88250/go-humanize"
 	"github.com/88250/gulu"
@@ -45,33 +44,27 @@ import (
 var Mode = "prod"
 
 const (
-	Ver       = "3.3.4"
+	Ver       = "3.6.5"
 	IsInsider = false
-
-	// env vars as fallback for commandline parameters
-	SIYUAN_ACCESS_AUTH_CODE = "SIYUAN_ACCESS_AUTH_CODE"
-	SIYUAN_WORKSPACE        = "SIYUAN_WORKSPACE_PATH"
-	SIYUAN_LANG             = "SIYUAN_LANG"
 )
 
 var (
-	RunInContainer                = false // 是否运行在容器中
-	SiyuanAccessAuthCodeBypass    = false // 是否跳过空访问授权码检查
-	SiyuanAccessAuthCodeViaEnvvar = ""    // Fallback auth code via env var (SIYUAN_ACCESS_AUTH_CODE)
+	RunInContainer             = false // 是否运行在容器中
+	SiYuanAccessAuthCodeBypass = false // 是否跳过空访问授权码检查
 )
 
 func initEnvVars() {
 	RunInContainer = isRunningInDockerContainer()
 	var err error
-	if SiyuanAccessAuthCodeBypass, err = strconv.ParseBool(os.Getenv("SIYUAN_ACCESS_AUTH_CODE_BYPASS")); err != nil {
-		SiyuanAccessAuthCodeBypass = false
+	if SiYuanAccessAuthCodeBypass, err = strconv.ParseBool(os.Getenv("SIYUAN_ACCESS_AUTH_CODE_BYPASS")); err != nil {
+		SiYuanAccessAuthCodeBypass = false
 	}
-	SiyuanAccessAuthCodeViaEnvvar = os.Getenv("SIYUAN_ACCESS_AUTH_CODE")
 }
 
 var (
 	bootProgress = atomic.Int32{} // 启动进度，从 0 到 100
 	bootDetails  string           // 启动细节描述
+	HttpServer   *http.Server     // HTTP 伺服器实例
 	HttpServing  = false          // 是否 HTTP 伺服已经可用
 )
 
@@ -91,7 +84,6 @@ func coalesceToEnvVar(fromCLI *string, envVarName string) *string {
 func Boot() {
 	initEnvVars()
 	IncBootProgress(3, "Booting kernel...")
-	rand.Seed(time.Now().UTC().UnixNano())
 	initMime()
 	initHttpClient()
 
@@ -101,16 +93,16 @@ func Boot() {
 	readOnly := flag.String("readonly", "false", "read-only mode")
 	accessAuthCode := flag.String("accessAuthCode", "", "access auth code")
 	ssl := flag.Bool("ssl", false, "for https and wss")
-	lang := flag.String("lang", "", "ar_SA/de_DE/en_US/es_ES/fr_FR/he_IL/it_IT/ja_JP/pl_PL/pt_BR/ru_RU/zh_CHT/zh_CN")
+	lang := flag.String("lang", "", "ar_SA/de_DE/en_US/es_ES/fr_FR/he_IL/it_IT/ja_JP/ko_KR/pl_PL/pt_BR/ru_RU/sk_SK/tr_TR/zh_CHT/zh_CN")
 	mode := flag.String("mode", "prod", "dev/prod")
 	flag.Parse()
 
 	// Fallback to env vars if commandline args are not set
 	// valid only for CLI args that default to "", as the
 	// others have explicit (sane) defaults
-	workspacePath = coalesceToEnvVar(workspacePath, SIYUAN_WORKSPACE)
-	accessAuthCode = coalesceToEnvVar(accessAuthCode, SIYUAN_ACCESS_AUTH_CODE)
-	lang = coalesceToEnvVar(lang, SIYUAN_LANG)
+	workspacePath = coalesceToEnvVar(workspacePath, "SIYUAN_WORKSPACE_PATH")
+	accessAuthCode = coalesceToEnvVar(accessAuthCode, "SIYUAN_ACCESS_AUTH_CODE")
+	lang = coalesceToEnvVar(lang, "SIYUAN_LANG")
 
 	if "" != *wdPath {
 		WorkingDir = *wdPath
@@ -122,8 +114,8 @@ func Boot() {
 	ServerPort = *port
 	ReadOnly, _ = strconv.ParseBool(*readOnly)
 	AccessAuthCode = *accessAuthCode
-	AccessAuthCode = strings.TrimSpace(AccessAuthCode)
 	AccessAuthCode = RemoveInvalid(AccessAuthCode)
+	AccessAuthCode = strings.TrimSpace(AccessAuthCode)
 	Container = ContainerStd
 	if RunInContainer {
 		Container = ContainerDocker
@@ -258,6 +250,9 @@ func initWorkspaceDir(workspaceArg string) {
 		if userProfile := os.Getenv("USERPROFILE"); "" != userProfile {
 			defaultWorkspaceDir = filepath.Join(userProfile, "SiYuan")
 		}
+	} else if gulu.OS.IsDarwin() {
+		// Change the initial workspace path to ~/Library/Application Support/SiYuan on macOS https://github.com/siyuan-note/siyuan/issues/17095
+		defaultWorkspaceDir = filepath.Join(HomeDir, "Library", "Application Support", "SiYuan")
 	}
 
 	var workspacePaths []string
@@ -334,10 +329,19 @@ func ReadWorkspacePaths() (ret []string, err error) {
 	}
 
 	var tmp []string
+	workspaceBaseDir := filepath.Dir(HomeDir)
 	for _, d := range ret {
+		if ContainerIOS == Container && strings.Contains(d, "/Documents/") {
+			// iOS 端沙箱路径会变化，需要转换为相对路径再拼接当前沙箱中的工作空间基路径
+			d = d[strings.Index(d, "/Documents/")+len("/Documents/"):]
+			d = filepath.Join(workspaceBaseDir, d)
+		}
+
 		d = strings.TrimRight(d, " \t\n") // 去掉工作空间路径尾部空格 https://github.com/siyuan-note/siyuan/issues/6353
 		if gulu.File.IsDir(d) {
 			tmp = append(tmp, d)
+		} else {
+			logging.LogWarnf("workspace path [%s] is not a dir", d)
 		}
 	}
 	ret = tmp
@@ -416,18 +420,18 @@ func initPathDir() {
 
 	plugins := filepath.Join(DataDir, "plugins")
 	if err := os.MkdirAll(plugins, 0755); err != nil && !os.IsExist(err) {
-		logging.LogFatalf(logging.ExitCodeInitWorkspaceErr, "create data plugins folder [%s] failed: %s", widgets, err)
+		logging.LogFatalf(logging.ExitCodeInitWorkspaceErr, "create data plugins folder [%s] failed: %s", plugins, err)
 	}
 
 	emojis := filepath.Join(DataDir, "emojis")
 	if err := os.MkdirAll(emojis, 0755); err != nil && !os.IsExist(err) {
-		logging.LogFatalf(logging.ExitCodeInitWorkspaceErr, "create data emojis folder [%s] failed: %s", widgets, err)
+		logging.LogFatalf(logging.ExitCodeInitWorkspaceErr, "create data emojis folder [%s] failed: %s", emojis, err)
 	}
 
 	// Support directly access `data/public/*` contents via URL link https://github.com/siyuan-note/siyuan/issues/8593
 	public := filepath.Join(DataDir, "public")
 	if err := os.MkdirAll(public, 0755); err != nil && !os.IsExist(err) {
-		logging.LogFatalf(logging.ExitCodeInitWorkspaceErr, "create data public folder [%s] failed: %s", widgets, err)
+		logging.LogFatalf(logging.ExitCodeInitWorkspaceErr, "create data public folder [%s] failed: %s", public, err)
 	}
 }
 
@@ -468,6 +472,7 @@ func initMime() {
 	mime.AddExtensionType(".gif", "image/gif")
 	mime.AddExtensionType(".bmp", "image/bmp")
 	mime.AddExtensionType(".tiff", "image/tiff")
+	mime.AddExtensionType(".tif", "image/tiff")
 	mime.AddExtensionType(".webp", "image/webp")
 	mime.AddExtensionType(".ico", "image/x-icon")
 }
@@ -542,4 +547,30 @@ func LogDatabaseSize(dbPath string) {
 
 	dbSize := humanize.BytesCustomCeil(uint64(dbFile.Size()), 2)
 	logging.LogInfof("database [%s] size [%s]", dbPath, dbSize)
+}
+
+func RemoveDatabaseFile(dbPath string) {
+	if gulu.File.IsExist(dbPath) {
+		err := os.RemoveAll(dbPath)
+		if err != nil {
+			logging.LogErrorf("remove database file [%s] failed: %s", dbPath, err)
+			return
+		}
+	}
+
+	if gulu.File.IsExist(dbPath + "-shm") {
+		err := os.RemoveAll(dbPath + "-shm")
+		if err != nil {
+			logging.LogErrorf("remove database file [%s] failed: %s", dbPath+"-shm", err)
+			return
+		}
+	}
+
+	if gulu.File.IsExist(dbPath + "-wal") {
+		err := os.RemoveAll(dbPath + "-wal")
+		if err != nil {
+			logging.LogErrorf("remove database file [%s] failed: %s", dbPath+"-wal", err)
+			return
+		}
+	}
 }

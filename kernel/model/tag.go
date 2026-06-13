@@ -19,6 +19,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -32,10 +33,6 @@ import (
 )
 
 func RemoveTag(label string) (err error) {
-	if "" == label {
-		return
-	}
-
 	util.PushEndlessProgress(Conf.Language(116))
 	util.RandomSleep(1000, 2000)
 
@@ -51,6 +48,11 @@ func RemoveTag(label string) (err error) {
 
 	var reloadTreeIDs []string
 	updateNodes := map[string]*ast.Node{}
+	historyDir, err := getHistoryDir(HistoryOpReplace)
+	if nil != err {
+		return
+	}
+
 	for treeID, blocks := range treeBlocks {
 		util.PushEndlessProgress("[" + treeID + "]")
 		tree, e := LoadTreeByBlockIDWithReindex(treeID)
@@ -58,6 +60,8 @@ func RemoveTag(label string) (err error) {
 			util.ClearPushProgress(100)
 			return e
 		}
+
+		generateTreeHistory(tree, historyDir)
 
 		var unlinks []*ast.Node
 		for _, blockID := range blocks {
@@ -104,6 +108,7 @@ func RemoveTag(label string) (err error) {
 		reloadTreeIDs = append(reloadTreeIDs, tree.ID)
 	}
 
+	indexHistoryDir(filepath.Base(historyDir), util.NewLute())
 	sql.FlushQueue()
 
 	reloadTreeIDs = gulu.Str.RemoveDuplicatedElem(reloadTreeIDs)
@@ -120,10 +125,9 @@ func RemoveTag(label string) (err error) {
 
 func RenameTag(oldLabel, newLabel string) (err error) {
 	if invalidChar := treenode.ContainsMarker(newLabel); "" != invalidChar {
-		return errors.New(fmt.Sprintf(Conf.Language(112), invalidChar))
+		return fmt.Errorf(Conf.Language(112), invalidChar)
 	}
 
-	newLabel = strings.TrimSpace(newLabel)
 	newLabel = strings.TrimPrefix(newLabel, "/")
 	newLabel = strings.TrimSuffix(newLabel, "/")
 	newLabel = strings.TrimSpace(newLabel)
@@ -151,6 +155,10 @@ func RenameTag(oldLabel, newLabel string) (err error) {
 
 	var reloadTreeIDs []string
 	updateNodes := map[string]*ast.Node{}
+	historyDir, err := getHistoryDir(HistoryOpReplace)
+	if nil != err {
+		return
+	}
 
 	for treeID, blocks := range treeBlocks {
 		util.PushEndlessProgress("[" + treeID + "]")
@@ -159,6 +167,8 @@ func RenameTag(oldLabel, newLabel string) (err error) {
 			util.ClearPushProgress(100)
 			return e
 		}
+
+		generateTreeHistory(tree, historyDir)
 
 		for _, blockID := range blocks {
 			node := treenode.GetNodeInTree(tree, blockID)
@@ -203,6 +213,7 @@ func RenameTag(oldLabel, newLabel string) (err error) {
 		reloadTreeIDs = append(reloadTreeIDs, tree.ID)
 	}
 
+	indexHistoryDir(filepath.Base(historyDir), util.NewLute())
 	sql.FlushQueue()
 
 	reloadTreeIDs = gulu.Str.RemoveDuplicatedElem(reloadTreeIDs)
@@ -236,7 +247,7 @@ type Tag struct {
 
 type Tags []*Tag
 
-func BuildTags() (ret *Tags) {
+func BuildTags(ignoreMaxListHintArg bool, appID string) (ret *Tags) {
 	FlushTxQueue()
 	sql.FlushQueue()
 
@@ -254,8 +265,8 @@ func BuildTags() (ret *Tags) {
 	for _, tag := range tags {
 		*tmp = append(*tmp, tag)
 		countTag(tag, &total)
-		if Conf.FileTree.MaxListCount < total {
-			util.PushMsg(fmt.Sprintf(Conf.Language(243), Conf.FileTree.MaxListCount), 7000)
+		if Conf.FileTree.MaxListCount < total && !ignoreMaxListHintArg {
+			util.PushMsgWithApp(appID, fmt.Sprintf(Conf.Language(243), Conf.FileTree.MaxListCount), 7000)
 			break
 		}
 	}

@@ -14,6 +14,7 @@ export class Dialog {
     private disableClose: boolean;
     public editors: { [key: string]: Protyle };
     public data: any;
+    private resizeCallback: (type: string) => void;
 
     constructor(options: {
         positionId?: string,
@@ -29,6 +30,7 @@ export class Dialog {
         resizeCallback?: (type: string) => void,
         containerClassName?: string
     }) {
+        this.resizeCallback = options.resizeCallback;
         this.disableClose = options.disableClose;
         this.id = genUUID();
         window.siyuan.dialogs.push(this);
@@ -85,6 +87,15 @@ left:${left || "auto"};top:${top || "auto"}">
         /// #endif
     }
 
+    public resize() {
+        if (this.resizeCallback) {
+            const containerElement = this.element.querySelector(".b3-dialog__container") as HTMLElement;
+            if (containerElement && containerElement.style.maxWidth !== "none") {
+                this.resizeCallback("l");
+            }
+        }
+    }
+
     public destroy(options?: IObject) {
         this.element.classList.remove("b3-dialog--open");
         setTimeout(() => {
@@ -112,18 +123,18 @@ left:${left || "auto"};top:${top || "auto"}">
         inputElement.focus();
         let timeStamp: number;
         inputElement.addEventListener("keydown", (event: KeyboardEvent) => {
-            if (event.isComposing || event.repeat) {
+            if (event.isComposing) {
                 event.preventDefault();
                 return;
             }
-            if (event.key === "Escape") {
+            if (event.key === "Escape" && !event.repeat) {
                 this.destroy();
                 event.preventDefault();
                 event.stopPropagation();
                 return;
             }
-            if (!event.shiftKey && isNotCtrl(event) && event.key === "Enter" && enterEvent && bindEnter) {
-                if (timeStamp && event.timeStamp - timeStamp < 124) {
+            if (!event.shiftKey && isNotCtrl(event) && event.key === "Enter" && enterEvent && bindEnter && !event.repeat) {
+                if (timeStamp && event.timeStamp - timeStamp < Constants.TIMEOUT_INPUT) {
                     return;
                 }
                 timeStamp = event.timeStamp;

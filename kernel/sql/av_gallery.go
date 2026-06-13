@@ -62,6 +62,8 @@ func RenderAttributeViewGallery(attrView *av.AttributeView, view *av.View, query
 				Relation:     key.Relation,
 				Rollup:       key.Rollup,
 				Date:         key.Date,
+				Created:      key.Created,
+				Updated:      key.Updated,
 			},
 		})
 	}
@@ -201,9 +203,11 @@ func fillAttributeViewGalleryCardCover(attrView *av.AttributeView, view *av.View
 			break
 		}
 
-		p := assetValue.MAsset[0].Content
-		if util.IsAssetsImage(p) {
-			galleryCard.CoverURL = p
+		for _, asset := range assetValue.MAsset {
+			if asset.Type == av.AssetTypeImage && util.IsPossiblyImage(asset.Content) {
+				galleryCard.CoverURL = asset.Content
+				break
+			}
 		}
 		return
 	case av.CoverFromContentBlock:
@@ -254,7 +258,7 @@ func renderCoverContentBlock(node *ast.Node, luteEngine *lute.Lute) string {
 
 func renderBlockDOMByNode(node *ast.Node, luteEngine *lute.Lute) string {
 	tree := &parse.Tree{Root: &ast.Node{Type: ast.NodeDocument}, Context: &parse.Context{ParseOption: luteEngine.ParseOptions}}
-	blockRenderer := render.NewProtyleRenderer(tree, luteEngine.RenderOptions)
+	blockRenderer := render.NewProtyleRenderer(tree, luteEngine.RenderOptions, luteEngine.ParseOptions)
 	blockRenderer.Options.ProtyleContenteditable = false
 	resetIDs := map[string]string{}
 	ast.Walk(node, func(n *ast.Node, entering bool) ast.WalkStatus {

@@ -4,17 +4,16 @@ import {hasClosestByAttribute, hasClosestByClassName} from "../util/hasClosest";
 import {genIconHTML} from "./util";
 
 export const mermaidRender = (element: Element, cdn = Constants.PROTYLE_CDN) => {
-    let mermaidElements: Element[] = [];
-    if (element.getAttribute("data-subtype") === "mermaid") {
-        // 编辑器内代码块编辑渲染
+    let mermaidElements: Element[] | NodeListOf<Element> = [];
+    if (element.getAttribute("data-subtype") === "mermaid" && element.getAttribute("data-render") !== "true") {
         mermaidElements = [element];
     } else {
-        mermaidElements = Array.from(element.querySelectorAll('[data-subtype="mermaid"]'));
+        mermaidElements = element.querySelectorAll('[data-subtype="mermaid"]:not([data-render="true"])');
     }
     if (mermaidElements.length === 0) {
         return;
     }
-    addScript(`${cdn}/js/mermaid/mermaid.min.js?v=11.12.0`, "protyleMermaidScript").then(() => {
+    addScript(`${cdn}/js/mermaid/mermaid.min.js?v=11.13.0`, "protyleMermaidScript").then(() => {
         addScript(`${cdn}/js/mermaid/mermaid-zenuml.min.js?v=0.2.2`, "protyleMermaidZenumlScript").then(async () => {
             await window.mermaid.registerExternalDiagrams([window.zenuml]);
             window.mermaid.registerIconPacks([
@@ -49,23 +48,33 @@ export const mermaidRender = (element: Element, cdn = Constants.PROTYLE_CDN) => 
                 config.theme = "dark";
             }
             window.mermaid.initialize(config);
-            if (mermaidElements[0].firstElementChild.clientWidth === 0) {
+            const hideElements: Element[] = [];
+            const normalElements: Element[] = [];
+            mermaidElements.forEach(item => {
+                if (item.firstElementChild.clientWidth === 0) {
+                    hideElements.push(item);
+                } else {
+                    normalElements.push(item);
+                }
+            });
+            if (hideElements.length > 0) {
                 const observer = new MutationObserver(() => {
-                    initMermaid(mermaidElements);
+                    initMermaid(hideElements);
                     observer.disconnect();
                 });
-                const hideElement = hasClosestByAttribute(mermaidElements[0], "fold", "1");
-                if (hideElement) {
-                    observer.observe(hideElement, {attributeFilter: ["fold"]});
-                } else {
-                    const cardElement = hasClosestByClassName(mermaidElements[0], "card__block", true);
-                    if (cardElement) {
-                        observer.observe(cardElement, {attributeFilter: ["class"]});
+                hideElements.forEach(item => {
+                    const hideElement = hasClosestByAttribute(item, "fold", "1");
+                    if (hideElement) {
+                        observer.observe(hideElement, {attributeFilter: ["fold"]});
+                    } else {
+                        const cardElement = hasClosestByClassName(item, "card__block", true);
+                        if (cardElement) {
+                            observer.observe(cardElement, {attributeFilter: ["class"]});
+                        }
                     }
-                }
-            } else {
-                initMermaid(mermaidElements);
+                });
             }
+            initMermaid(normalElements);
         });
     });
 };
@@ -76,6 +85,7 @@ const initMermaid = (mermaidElements: Element[]) => {
         if (item.getAttribute("data-render") === "true") {
             return;
         }
+        item.setAttribute("data-render", "true");
         if (!item.firstElementChild.classList.contains("protyle-icons")) {
             item.insertAdjacentHTML("afterbegin", genIconHTML(wysiswgElement));
         }
@@ -88,12 +98,19 @@ const initMermaid = (mermaidElements: Element[]) => {
         try {
             renderElement.innerHTML = `<span style="position: absolute;left:0;top:0;width: 1px;">${Constants.ZWSP}</span><div contenteditable="false"><span id="${id}"></span></div>`;
             const mermaidData = await window.mermaid.render(id, Lute.UnEscapeHTMLStr(item.getAttribute("data-content")));
-            renderElement.lastElementChild.innerHTML = mermaidData.svg;
+            let svg = mermaidData.svg.replace(/(href|src|xlink:href)\s*=\s*["']\\\\/gi, (match, p1) => `${p1}="about:blank"`);
+            svg = window.DOMPurify.sanitize(svg, {
+                USE_PROFILES: { svg: true, svgFilters: true },
+                ADD_TAGS: ["foreignObject", "use", "style"],
+                    ADD_ATTR: ["dominant-baseline", "xlink:href", "href"], // 保留对齐和链接属性
+                    // 必须添加此项，否则 foreignObject 里的 HTML 内容会被清空
+                    HTML_INTEGRATION_POINTS: { foreignobject: true }
+            });
+            renderElement.lastElementChild.innerHTML = svg;
         } catch (e) {
             const errorElement = document.querySelector("#" + id);
             renderElement.lastElementChild.innerHTML = `${errorElement.outerHTML}<div class="fn__hr"></div><div class="ft__error">${e.message.replace(/\n/, "<br>")}</div>`;
             errorElement.parentElement.remove();
         }
-        item.setAttribute("data-render", "true");
     });
 };

@@ -8,7 +8,7 @@ import {popSearch} from "../../../mobile/menu/search";
 import {getRecentDocs} from "../../../mobile/menu/getRecentDocs";
 /// #else
 import {openNewWindow} from "../../../window/openNewWindow";
-import {selectOpenTab, toggleDockBar} from "../../../layout/dock/util";
+import {openBacklink, openGraph, openOutline, selectOpenTab, toggleDockBar} from "../../../layout/dock/util";
 import {openGlobalSearch} from "../../../search/util";
 import {workspaceMenu} from "../../../menus/workspace";
 import {isWindow} from "../../../util/functions";
@@ -40,6 +40,9 @@ import {openCard} from "../../../card/openCard";
 import {syncGuide} from "../../../sync/syncGuide";
 import {Wnd} from "../../../layout/Wnd";
 import {unsplitWnd} from "../../../menus/tab";
+import {openFile} from "../../../editor/util";
+import {fetchPost} from "../../../util/fetch";
+import {setStorageVal} from "../../../protyle/util/compatibility";
 
 export const globalCommand = (command: string, app: App) => {
     /// #if MOBILE
@@ -147,6 +150,91 @@ export const globalCommand = (command: string, app: App) => {
             return true;
         case "recentDocs":
             openRecentDocs();
+            return true;
+        case "recentClosed":
+            if (window.siyuan.storage[Constants.LOCAL_CLOSED_TABS].length > 0) {
+                const closeData = window.siyuan.storage[Constants.LOCAL_CLOSED_TABS].pop();
+                setStorageVal(Constants.LOCAL_CLOSED_TABS, window.siyuan.storage[Constants.LOCAL_CLOSED_TABS]);
+                const childData = closeData.children as ILayoutJSON;
+                if (childData.instance === "Search") {
+                    openFile({
+                        app,
+                        searchData: childData.config,
+                    });
+                    return true;
+                }
+                if (childData.instance === "Asset") {
+                    fetchPost("/api/asset/statAsset", {path: childData.path}, (response) => {
+                        if (response.code !== 1) {
+                            openFile({
+                                app,
+                                assetPath: childData.path,
+                                page: childData.page,
+                            });
+                        }
+                    });
+                    return true;
+                }
+                if (childData.instance === "Custom") {
+                    let exit = childData.customModelType === "siyuan-card";
+                    if (!exit) {
+                        app.plugins.find(p => {
+                            if (p.models[childData.customModelType]) {
+                                exit = true;
+                                return true;
+                            }
+                        });
+                    }
+                    if (exit) {
+                        openFile({
+                            app,
+                            custom: {
+                                icon: closeData.icon,
+                                title: closeData.title,
+                                data: childData.customModelData,
+                                id: childData.customModelType
+                            },
+                        });
+                    }
+                    return true;
+                }
+                fetchPost("/api/block/getBlockInfo", {id: childData.rootId || childData.blockId}, (infoResponse) => {
+                    if (infoResponse.data.rootID === (childData.rootId || childData.blockId)) {
+                        if (childData.instance === "Editor") {
+                            openFile({
+                                app,
+                                fileName: closeData.title,
+                                id: childData.blockId,
+                                rootID: childData.rootId,
+                                mode: childData.mode,
+                                rootIcon: closeData.docIcon,
+                                action: [childData.action]
+                            });
+                        } else if (childData.instance === "Backlink") {
+                            openBacklink({
+                                app,
+                                blockId: childData.blockId,
+                                rootId: childData.rootId,
+                                title: closeData.title,
+                            });
+                        } else if (childData.instance === "Graph") {
+                            openGraph({
+                                app,
+                                blockId: childData.blockId,
+                                rootId: childData.rootId,
+                                title: closeData.title
+                            });
+                        } else if (childData.instance === "Outline") {
+                            openOutline({
+                                app,
+                                rootId: childData.blockId,
+                                title: closeData.title,
+                                isPreview: childData.isPreview
+                            });
+                        }
+                    }
+                });
+            }
             return true;
         case "toggleDock":
             toggleDockBar(document.querySelector("#barDock use"));

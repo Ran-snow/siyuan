@@ -804,7 +804,7 @@ func (tx *Transaction) removeBlocksDeckAttr(blockIDs []string, deckID string) (e
 
 		oldAttrs := parse.IAL2Map(node.KramdownIAL)
 
-		deckAttrs := node.IALAttr("custom-riff-decks")
+		deckAttrs := node.IALAttr(NodeAttrRiffDecks)
 		var deckIDs []string
 		if "" != deckID {
 			availableDeckIDs := getDeckIDs()
@@ -820,17 +820,15 @@ func (tx *Transaction) removeBlocksDeckAttr(blockIDs []string, deckID string) (e
 		val = strings.TrimPrefix(val, ",")
 		val = strings.TrimSuffix(val, ",")
 		if "" == val {
-			node.RemoveIALAttr("custom-riff-decks")
+			node.RemoveIALAttr(NodeAttrRiffDecks)
 		} else {
-			node.SetIALAttr("custom-riff-decks", val)
+			node.SetIALAttr(NodeAttrRiffDecks, val)
 		}
 
-		if err = tx.writeTree(tree); err != nil {
-			return
-		}
+		tx.writeTree(tree)
 
 		cache.PutBlockIAL(blockID, parse.IAL2Map(node.KramdownIAL))
-		pushBroadcastAttrTransactions(oldAttrs, node)
+		pushBlockAttrs(oldAttrs, node)
 	}
 
 	return
@@ -912,21 +910,19 @@ func (tx *Transaction) doAddFlashcards(operation *Operation) (ret *TxErr) {
 
 		oldAttrs := parse.IAL2Map(node.KramdownIAL)
 
-		deckAttrs := node.IALAttr("custom-riff-decks")
+		deckAttrs := node.IALAttr(NodeAttrRiffDecks)
 		deckIDs := strings.Split(deckAttrs, ",")
 		deckIDs = append(deckIDs, deckID)
 		deckIDs = gulu.Str.RemoveDuplicatedElem(deckIDs)
 		val := strings.Join(deckIDs, ",")
 		val = strings.TrimPrefix(val, ",")
 		val = strings.TrimSuffix(val, ",")
-		node.SetIALAttr("custom-riff-decks", val)
+		node.SetIALAttr(NodeAttrRiffDecks, val)
 
-		if err := tx.writeTree(tree); err != nil {
-			return &TxErr{code: TxErrCodeWriteTree, msg: err.Error(), id: deckID}
-		}
+		tx.writeTree(tree)
 
 		cache.PutBlockIAL(blockID, parse.IAL2Map(node.KramdownIAL))
-		pushBroadcastAttrTransactions(oldAttrs, node)
+		pushBlockAttrs(oldAttrs, node)
 	}
 
 	deck := Decks[deckID]
@@ -1109,7 +1105,7 @@ func getDeckDueCards(deck *riff.Deck, reviewedCardIDs, blockIDs []string, newCar
 	}
 	var toCheckBlockIDs []string
 	var tmp []riff.Card
-	for bID, _ := range toChecks {
+	for bID := range toChecks {
 		toCheckBlockIDs = append(toCheckBlockIDs, bID)
 	}
 	checkResult := treenode.ExistBlockTrees(toCheckBlockIDs)
@@ -1199,3 +1195,7 @@ func getDeckDueCards(deck *riff.Deck, reviewedCardIDs, blockIDs []string, newCar
 	}
 	return
 }
+
+const (
+	NodeAttrRiffDecks = "custom-riff-decks"
+)

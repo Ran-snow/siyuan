@@ -21,7 +21,12 @@
     font-size: 16px;
     line-height: 40px;
 
-    &__icon {
+    &:not(.b3-list-item--focus):hover {
+      background-color: transparent !important;
+    }
+
+    &__icon,
+    &__switch {
       font-size: 18px;
       line-height: 32px;
       height: auto;
@@ -150,7 +155,7 @@
 .side-panel {
   position: fixed;
   background-color: var(--b3-theme-surface);
-  height: 100vh;
+  height: 100%;
   width: 100vw;
   z-index: 7;
   transform: translateX(-100vw);
@@ -251,8 +256,8 @@
       justify-content: center;
       overflow: auto;
       flex: 1;
-      margin-top: 8px;
-      padding: 0 8px;
+      padding: 8px;
+      background-color: var(--b3-theme-background);
     }
   }
 }
@@ -278,7 +283,7 @@
   bottom: 0;
   width: 100%;
   box-sizing: border-box;
-  height: 42px;
+  height: 48px;
   background: var(--b3-theme-background);
   display: flex;
   border-top: 1px solid var(--b3-theme-surface-lighter);
@@ -336,8 +341,8 @@
       height: 16px;
       width: 16px;
       float: left;
-      padding: 6px;
-      margin: 6px;
+      padding: 13px 9px;
+      margin: 3px;
       border-radius: var(--b3-border-radius);
 
       &.keyboard__svg--big {

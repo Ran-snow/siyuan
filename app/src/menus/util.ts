@@ -11,6 +11,9 @@ import {MenuItem} from "./Menu";
 import {App} from "../index";
 import {exportByMobile, isInAndroid, updateHotkeyTip} from "../protyle/util/compatibility";
 import {checkFold} from "../util/noRelyPCFunction";
+import {showMessage} from "../dialog/message";
+import {Editor} from "../editor";
+import {setEditMode} from "../protyle/util/setEditMode";
 
 export const exportAsset = (src: string) => {
     return {
@@ -27,11 +30,37 @@ export const exportAsset = (src: string) => {
                 properties: ["showOverwriteConfirmation"],
             });
             if (!result.canceled) {
-                fetchPost("/api/file/copyFile", {src, dest: result.filePath});
+                fetchPost("/api/file/copyFile", {src, dest: result.filePath}, (response) => {
+                    if (response.code === 0) {
+                        showMessage(window.siyuan.languages.exported);
+                    }
+                });
             }
             /// #endif
         }
     };
+};
+
+// 复制资源文件到系统剪贴板，在文件资源管理器中可粘贴为文件（仅 Windows、macOS 桌面端支持）
+export const writeAssetToClipboard = (src: string) => {
+    /// #if !BROWSER
+    if (["windows", "darwin"].includes(window.siyuan.config.system.os)) {
+        return {
+            id: "copyFile",
+            label: window.siyuan.languages.copyFile,
+            icon: "iconFile",
+            click: () => {
+                fetchPost("/api/clipboard/writeFilePath", {path: src}, () => {
+                    showMessage(window.siyuan.languages.copied);
+                });
+            }
+        };
+    } else {
+        return {ignore: true};
+    }
+    /// #else
+    return {ignore: true};
+    /// #endif
 };
 
 export const openEditorTab = (app: App, ids: string[], notebookId?: string, pathString?: string, onlyGetMenus = false) => {
@@ -137,7 +166,11 @@ export const openEditorTab = (app: App, ids: string[], notebookId?: string, path
         label: window.siyuan.languages.preview,
         click: () => {
             ids.forEach((id) => {
-                openFileById({app, id, mode: "preview"});
+                openFileById({
+                    app, id, mode: "preview", afterOpen(editor: Editor) {
+                        setEditMode(editor.editor.protyle, "preview");
+                    }
+                });
             });
         }
     });

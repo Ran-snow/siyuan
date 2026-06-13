@@ -52,15 +52,14 @@ func statAsset(c *gin.Context) {
 			return
 		}
 
-	} else if strings.HasPrefix(path, "file://") {
-		p = strings.TrimPrefix(path, "file://")
-		if strings.Contains(p, ":") {
-			p = strings.TrimPrefix(p, "/")
-		}
-		if strings.Contains(p, "?") {
-			p = p[:strings.Index(p, "?")]
-		}
+	} else if localPath := util.FileURLToLocalPath(path); localPath != "" {
+		p = localPath
 	} else {
+		ret.Code = 1
+		return
+	}
+
+	if !util.IsAbsPathInWorkspace(p) {
 		ret.Code = 1
 		return
 	}
@@ -87,7 +86,7 @@ func statAsset(c *gin.Context) {
 		hCreated = t.BirthTime().Format("2006-01-02 15:04:05")
 	}
 
-	ret.Data = map[string]interface{}{
+	ret.Data = map[string]any{
 		"size":     info.Size(),
 		"hSize":    humanize.IBytesCustomCeil(uint64(info.Size()), 2),
 		"created":  created,
@@ -113,9 +112,17 @@ func getImageOCRText(c *gin.Context) {
 		return
 	}
 
-	path := arg["path"].(string)
+	var path string
+	if nil == arg["path"] {
+		ret.Data = map[string]any{
+			"text": "",
+		}
+		return
+	}
 
-	ret.Data = map[string]interface{}{
+	path = arg["path"].(string)
+
+	ret.Data = map[string]any{
 		"text": util.GetAssetText(path),
 	}
 }
@@ -157,11 +164,11 @@ func ocr(c *gin.Context) {
 	if nil != err {
 		ret.Code = -1
 		ret.Msg = err.Error()
-		ret.Data = map[string]interface{}{"closeTimeout": 7000}
+		ret.Data = map[string]any{"closeTimeout": 7000}
 		return
 	}
 
-	ret.Data = map[string]interface{}{
+	ret.Data = map[string]any{
 		"text":    util.GetOcrJsonText(ocrJSON),
 		"ocrJSON": ocrJSON,
 	}
@@ -182,10 +189,10 @@ func renameAsset(c *gin.Context) {
 	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
-		ret.Data = map[string]interface{}{"closeTimeout": 5000}
+		ret.Data = map[string]any{"closeTimeout": 5000}
 		return
 	}
-	ret.Data = map[string]interface{}{
+	ret.Data = map[string]any{
 		"newPath": newPath,
 	}
 }
@@ -206,6 +213,14 @@ func getDocImageAssets(c *gin.Context) {
 		ret.Msg = err.Error()
 		return
 	}
+	if model.IsReadOnlyRoleContext(c) {
+		publishAccess := model.GetPublishAccess()
+		if !model.CheckBlockIdAccessableByPublishAccess(c, publishAccess, id) {
+			ret.Code = -1
+			ret.Msg = fmt.Sprintf(model.Conf.Language(15), id)
+			return
+		}
+	}
 	ret.Data = assets
 }
 
@@ -224,6 +239,14 @@ func getDocAssets(c *gin.Context) {
 		ret.Code = -1
 		ret.Msg = err.Error()
 		return
+	}
+	if model.IsReadOnlyRoleContext(c) {
+		publishAccess := model.GetPublishAccess()
+		if !model.CheckBlockIdAccessableByPublishAccess(c, publishAccess, id) {
+			ret.Code = -1
+			ret.Msg = fmt.Sprintf(model.Conf.Language(15), id)
+			return
+		}
 	}
 	ret.Data = assets
 }
@@ -270,7 +293,7 @@ func getFileAnnotation(c *gin.Context) {
 	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
-		ret.Data = map[string]interface{}{"closeTimeout": 5000}
+		ret.Data = map[string]any{"closeTimeout": 5000}
 		return
 	}
 	if !filelock.IsExist(readPath) {
@@ -284,7 +307,7 @@ func getFileAnnotation(c *gin.Context) {
 		ret.Msg = err.Error()
 		return
 	}
-	ret.Data = map[string]interface{}{
+	ret.Data = map[string]any{
 		"data": string(data),
 	}
 }
@@ -312,7 +335,7 @@ func removeUnusedAsset(c *gin.Context) {
 
 	p := arg["path"].(string)
 	asset := model.RemoveUnusedAsset(p)
-	ret.Data = map[string]interface{}{
+	ret.Data = map[string]any{
 		"path": asset,
 	}
 }
@@ -322,7 +345,7 @@ func removeUnusedAssets(c *gin.Context) {
 	defer c.JSON(http.StatusOK, ret)
 
 	paths := model.RemoveUnusedAssets()
-	ret.Data = map[string]interface{}{
+	ret.Data = map[string]any{
 		"paths": paths,
 	}
 }
@@ -331,7 +354,7 @@ func getUnusedAssets(c *gin.Context) {
 	ret := gulu.Ret.NewResult()
 	defer c.JSON(http.StatusOK, ret)
 
-	unusedAssets := model.UnusedAssets()
+	unusedAssets := model.UnusedAssets(true)
 	total := len(unusedAssets)
 
 	// List only 512 unreferenced assets https://github.com/siyuan-note/siyuan/issues/13075
@@ -341,9 +364,7 @@ func getUnusedAssets(c *gin.Context) {
 		util.PushMsg(fmt.Sprintf(model.Conf.Language(251), total, maxUnusedAssets), 5000)
 	}
 
-	ret.Data = map[string]interface{}{
-		"unusedAssets": unusedAssets,
-	}
+	ret.Data = unusedAssets
 }
 
 func getMissingAssets(c *gin.Context) {
@@ -351,9 +372,7 @@ func getMissingAssets(c *gin.Context) {
 	defer c.JSON(http.StatusOK, ret)
 
 	missingAssets := model.MissingAssets()
-	ret.Data = map[string]interface{}{
-		"missingAssets": missingAssets,
-	}
+	ret.Data = missingAssets
 }
 
 func resolveAssetPath(c *gin.Context) {
@@ -370,7 +389,7 @@ func resolveAssetPath(c *gin.Context) {
 	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
-		ret.Data = map[string]interface{}{"closeTimeout": 3000}
+		ret.Data = map[string]any{"closeTimeout": 3000}
 		return
 	}
 	ret.Data = p
@@ -386,16 +405,60 @@ func uploadCloud(c *gin.Context) {
 		return
 	}
 
+	ignorePushMsg := false
+	if nil != arg["ignorePushMsg"] {
+		ignorePushMsg = arg["ignorePushMsg"].(bool)
+	}
+
 	id := arg["id"].(string)
-	count, err := model.UploadAssets2Cloud(id)
+	count, err := model.UploadAssets2Cloud(id, ignorePushMsg)
 	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
-		ret.Data = map[string]interface{}{"closeTimeout": 3000}
+		ret.Data = map[string]any{"closeTimeout": 3000}
 		return
 	}
 
 	util.PushMsg(fmt.Sprintf(model.Conf.Language(41), count), 3000)
+}
+
+func uploadCloudByAssetsPaths(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	arg, ok := util.JsonArg(c, ret)
+	if !ok {
+		return
+	}
+
+	if nil == arg["paths"] {
+		ret.Code = -1
+		ret.Msg = "[paths] is required"
+		return
+	}
+
+	pathsArg := arg["paths"].([]any)
+	var assets []string
+	for _, pathArg := range pathsArg {
+		assets = append(assets, pathArg.(string))
+	}
+
+	ignorePushMsg := false
+	if nil != arg["ignorePushMsg"] {
+		ignorePushMsg = arg["ignorePushMsg"].(bool)
+	}
+
+	count, err := model.UploadAssets2CloudByAssetsPaths(assets, ignorePushMsg)
+	if err != nil {
+		ret.Code = -1
+		ret.Msg = err.Error()
+		ret.Data = map[string]any{"closeTimeout": 3000}
+		return
+	}
+
+	if !ignorePushMsg {
+		util.PushMsg(fmt.Sprintf(model.Conf.Language(41), count), 3000)
+	}
 }
 
 func insertLocalAssets(c *gin.Context) {
@@ -407,7 +470,7 @@ func insertLocalAssets(c *gin.Context) {
 		return
 	}
 
-	assetPathsArg := arg["assetPaths"].([]interface{})
+	assetPathsArg := arg["assetPaths"].([]any)
 	var assetPaths []string
 	for _, pathArg := range assetPathsArg {
 		assetPaths = append(assetPaths, pathArg.(string))
@@ -424,7 +487,7 @@ func insertLocalAssets(c *gin.Context) {
 		ret.Msg = err.Error()
 		return
 	}
-	ret.Data = map[string]interface{}{
+	ret.Data = map[string]any{
 		"succMap": succMap,
 	}
 }

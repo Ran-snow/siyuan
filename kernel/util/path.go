@@ -19,7 +19,7 @@ package util
 import (
 	"bytes"
 	"io/fs"
-	"net"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/88250/gulu"
-	"github.com/gabriel-vasile/mimetype"
 	"github.com/siyuan-note/filelock"
 	"github.com/siyuan-note/logging"
 )
@@ -37,6 +36,13 @@ import (
 var (
 	SSL       = false
 	UserAgent = "SiYuan/" + Ver
+
+	// invisibleCharsReplacer 用于 NormalizeEndpoint：去除复制粘贴易带入的零宽字符。
+	invisibleCharsReplacer = strings.NewReplacer(
+		"\u200b", "", // 零宽空格 ZWSP
+		"\u200c", "", // 零宽不连字 ZWNJ
+		"\u200d", "", // 零宽连字 ZWJ
+	)
 )
 
 func TrimSpaceInPath(p string) string {
@@ -65,85 +71,20 @@ func ShortPathForBootingDisplay(p string) string {
 
 var LocalIPs []string
 
-func GetLocalIPs() (ret []string) {
-	if ContainerAndroid == Container || ContainerHarmony == Container {
-		// Android 上用不了 net.InterfaceAddrs() https://github.com/golang/go/issues/40569，所以前面使用启动内核传入的参数 localIPs
-		LocalIPs = append(LocalIPs, LocalHost)
-		LocalIPs = gulu.Str.RemoveDuplicatedElem(LocalIPs)
-		return LocalIPs
-	}
-
-	ret = []string{}
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		logging.LogWarnf("get interface addresses failed: %s", err)
-		return
-	}
-
-	IPv4Nets := []*net.IPNet{}
-	IPv6Nets := []*net.IPNet{}
-	for _, addr := range addrs {
-		if networkIp, ok := addr.(*net.IPNet); ok && networkIp.IP.String() != "<nil>" {
-			if networkIp.IP.To4() != nil {
-				IPv4Nets = append(IPv4Nets, networkIp)
-			} else if networkIp.IP.To16() != nil {
-				IPv6Nets = append(IPv6Nets, networkIp)
-			}
-		}
-	}
-
-	// loopback address
-	for _, net := range IPv4Nets {
-		if net.IP.IsLoopback() {
-			ret = append(ret, net.IP.String())
-		}
-	}
-	// private address
-	for _, net := range IPv4Nets {
-		if net.IP.IsPrivate() {
-			ret = append(ret, net.IP.String())
-		}
-	}
-	// IPv4 private address
-	for _, net := range IPv4Nets {
-		if net.IP.IsGlobalUnicast() {
-			ret = append(ret, net.IP.String())
-		}
-	}
-	// link-local unicast address
-	for _, net := range IPv4Nets {
-		if net.IP.IsLinkLocalUnicast() {
-			ret = append(ret, net.IP.String())
-		}
-	}
-
-	// loopback address
-	for _, net := range IPv6Nets {
-		if net.IP.IsLoopback() {
-			ret = append(ret, "["+net.IP.String()+"]")
-		}
-	}
-	// private address
-	for _, net := range IPv6Nets {
-		if net.IP.IsPrivate() {
-			ret = append(ret, "["+net.IP.String()+"]")
-		}
-	}
-	// IPv6 private address
-	for _, net := range IPv6Nets {
-		if net.IP.IsGlobalUnicast() {
-			ret = append(ret, "["+net.IP.String()+"]")
-		}
-	}
-	// link-local unicast address
-	for _, net := range IPv6Nets {
-		if net.IP.IsLinkLocalUnicast() {
-			ret = append(ret, "["+net.IP.String()+"]")
-		}
+func GetServerAddrs() (ret []string) {
+	if ContainerAndroid != Container && ContainerHarmony != Container {
+		ret = GetPrivateIPv4s()
+	} else {
+		// Android/鸿蒙上用不了 net.InterfaceAddrs() https://github.com/golang/go/issues/40569，所以前面使用启动内核传入的参数 localIPs
+		ret = LocalIPs
 	}
 
 	ret = append(ret, LocalHost)
 	ret = gulu.Str.RemoveDuplicatedElem(ret)
+
+	for i := range ret {
+		ret[i] = "http://" + ret[i] + ":" + ServerPort
+	}
 	return
 }
 
@@ -163,6 +104,14 @@ func IsRelativePath(dest string) bool {
 	}
 
 	if '/' == dest[0] {
+		return false
+	}
+
+	// 检查特定协议前缀
+	lowerDest := strings.ToLower(dest)
+	if strings.HasPrefix(lowerDest, "mailto:") ||
+		strings.HasPrefix(lowerDest, "tel:") ||
+		strings.HasPrefix(lowerDest, "sms:") {
 		return false
 	}
 	return !strings.Contains(dest, ":/") && !strings.Contains(dest, ":\\")
@@ -249,13 +198,25 @@ func NormalizeTimeout(timeout int) int {
 }
 
 func NormalizeEndpoint(endpoint string) string {
+	endpoint = invisibleCharsReplacer.Replace(endpoint)
 	endpoint = strings.TrimSpace(endpoint)
 	if "" == endpoint {
 		return ""
 	}
+	endpoint = strings.Replace(endpoint, "http://http(s)://", "https://", 1)
+	endpoint = strings.Replace(endpoint, "http(s)://", "https://", 1)
 	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
 		endpoint = "http://" + endpoint
 	}
+	if idx := strings.Index(endpoint, "://"); 0 <= idx {
+		head := endpoint[:idx+len("://")]
+		tail := endpoint[idx+len("://"):]
+		for strings.Contains(tail, "//") {
+			tail = strings.ReplaceAll(tail, "//", "/")
+		}
+		endpoint = head + tail
+	}
+	endpoint = strings.TrimSpace(endpoint)
 	if !strings.HasSuffix(endpoint, "/") {
 		endpoint = endpoint + "/"
 	}
@@ -293,7 +254,7 @@ func FilterSelfChildDocs(paths []string) (ret []string) {
 	for _, fromPath := range paths {
 		dir := strings.TrimSuffix(fromPath, ".sy")
 		existParent := false
-		for d, _ := range dirs {
+		for d := range dirs {
 			if strings.HasPrefix(fromPath, d) {
 				existParent = true
 				break
@@ -308,8 +269,33 @@ func FilterSelfChildDocs(paths []string) (ret []string) {
 	return
 }
 
-func IsAssetLinkDest(dest []byte) bool {
-	return bytes.HasPrefix(dest, []byte("assets/"))
+// FileURLToLocalPath 将 file:// URL 转为本地文件路径。
+func FileURLToLocalPath(fileURL string) string {
+	if len(fileURL) < 7 || strings.ToLower(fileURL[:7]) != "file://" {
+		return ""
+	}
+	p := fileURL[7:]
+	if gulu.OS.IsWindows() && strings.Contains(p, ":") {
+		// Windows 支持 file:// 后跟多个斜杠 https://github.com/siyuan-note/siyuan/issues/11885
+		p = strings.TrimLeft(p, "/")
+	}
+	if strings.Contains(p, "?") {
+		// 去除查询参数 https://github.com/siyuan-note/siyuan/issues/13600
+		p = p[:strings.Index(p, "?")]
+	}
+	if unescaped, err := url.PathUnescape(p); err == nil && unescaped != p {
+		// `Convert network images/assets to local` supports URL-encoded local file names https://github.com/siyuan-note/siyuan/issues/9929
+		p = unescaped
+	}
+	return p
+}
+
+func IsAssetLinkDest(dest []byte, includeServePath bool) bool {
+	return bytes.HasPrefix(dest, []byte("assets/")) ||
+		(includeServePath && (bytes.HasPrefix(dest, []byte("emojis/")) ||
+			bytes.HasPrefix(dest, []byte("plugins/")) ||
+			bytes.HasPrefix(dest, []byte("public/")) ||
+			bytes.HasPrefix(dest, []byte("widgets/"))))
 }
 
 var (
@@ -318,25 +304,35 @@ var (
 	SiYuanAssetsVideo = []string{".mov", ".weba", ".mkv", ".mp4", ".webm"}
 )
 
-func IsAssetsImage(assetPath string) bool {
+// IsPossiblyImage 模糊判断指定文件链接是否可能是图片。
+func IsPossiblyImage(assetPath string) bool {
 	ext := strings.ToLower(filepath.Ext(assetPath))
-	if "" == ext {
-		absPath := filepath.Join(DataDir, assetPath)
-		f, err := filelock.OpenFile(absPath, os.O_RDONLY, 0644)
-		if err != nil {
-			logging.LogErrorf("open file [%s] failed: %s", absPath, err)
-			return false
-		}
-		defer filelock.CloseFile(f)
-		m, err := mimetype.DetectReader(f)
-		if nil != err {
-			logging.LogWarnf("detect file [%s] mimetype failed: %v", absPath, err)
-			return false
-		}
-
-		ext = m.Extension()
+	if "" != ext {
+		return gulu.Str.Contains(ext, SiYuanAssetsImage)
 	}
-	return gulu.Str.Contains(ext, SiYuanAssetsImage)
+
+	if strings.HasPrefix(assetPath, "https://") || strings.HasPrefix(assetPath, "http://") {
+		// 网络图片链接不一定有扩展名
+		return true
+	}
+
+	if filePath := FileURLToLocalPath(assetPath); filePath != "" {
+		m, ok := GetMimeTypeByPath(filePath)
+		if !ok {
+			return false
+		}
+		return gulu.Str.Contains(m.Extension(), SiYuanAssetsImage)
+	}
+
+	if IsAssetLinkDest([]byte(assetPath), true) {
+		filePath := filepath.Join(DataDir, assetPath)
+		m, ok := GetMimeTypeByPath(filePath)
+		if !ok {
+			return false
+		}
+		return gulu.Str.Contains(m.Extension(), SiYuanAssetsImage)
+	}
+	return false
 }
 
 func IsDisplayableAsset(p string) bool {
@@ -363,14 +359,14 @@ func GetAbsPathInWorkspace(relPath string) (string, error) {
 		return absPath, nil
 	}
 
-	if IsSubPath(WorkspaceDir, absPath) {
+	if gulu.File.IsSubPath(WorkspaceDir, absPath) {
 		return absPath, nil
 	}
 	return "", os.ErrPermission
 }
 
 func IsAbsPathInWorkspace(absPath string) bool {
-	return IsSubPath(WorkspaceDir, absPath)
+	return gulu.File.IsSubPath(WorkspaceDir, absPath)
 }
 
 // IsWorkspaceDir 判断指定目录是否是工作空间目录。
@@ -396,8 +392,101 @@ func IsPartitionRootPath(path string) bool {
 	if runtime.GOOS == "windows" {
 		// On Windows, root paths are like "C:\", "D:\", etc.
 		return len(cleanPath) == 3 && cleanPath[1] == ':' && cleanPath[2] == '\\'
-	} else {
-		// On Unix-like systems, the root path is "/"
-		return cleanPath == "/"
 	}
+
+	// On Unix-like systems, the root path is "/"
+	return cleanPath == "/"
+}
+
+// IsSensitivePath 对传入路径做统一的敏感性检测。
+func IsSensitivePath(p string) bool {
+	if p == "" {
+		return false
+	}
+	toCheckPathLower := filepath.Clean(strings.ToLower(p))
+	toCheckNameLower := filepath.Base(toCheckPathLower)
+
+	// 敏感目录前缀（UNIX 风格）
+	prefixes := []string{
+		"/.",
+		"/etc",
+		"/root",
+		"/var",
+		"/proc",
+		"/sys",
+		"/run",
+		"/bin",
+		"/boot",
+		"/dev",
+		"/lib",
+		"/srv",
+		"/tmp",
+		"/usr",
+		"/opt",
+		"/sbin",
+	}
+	for _, pre := range prefixes {
+		if strings.HasPrefix(toCheckPathLower, pre) {
+			return true
+		}
+	}
+
+	// Windows 常见敏感目录（小写比较）
+	winPrefixes := []string{
+		`c:\windows\system32`,
+		`c:\windows\system`,
+	}
+	for _, wp := range winPrefixes {
+		if strings.HasPrefix(toCheckPathLower, strings.ToLower(wp)) {
+			return true
+		}
+	}
+
+	// Windows 开始启动菜单路径（小写比较）
+	startMenuPrefixes := []string{
+		strings.ToLower(filepath.Join(os.Getenv("APPDATA"), "Microsoft", "Windows", "Start Menu")),
+		strings.ToLower(filepath.Join(os.Getenv("ProgramData"), "Microsoft", "Windows", "Start Menu")),
+	}
+	for _, sp := range startMenuPrefixes {
+		if strings.HasPrefix(toCheckPathLower, sp) {
+			return true
+		}
+	}
+
+	// 工作空间/conf 目录（小写比较）
+	workspaceConfPrefix := strings.ToLower(filepath.Join(WorkspaceDir, "conf"))
+	if strings.HasPrefix(toCheckPathLower, workspaceConfPrefix) {
+		return true
+	}
+
+	// *.db/*.log
+	if strings.HasSuffix(p, ".db") || strings.HasSuffix(p, ".log") {
+		return true
+	}
+
+	// 用户家目录下的敏感目录（小写比较）
+	homePrefixes := []string{
+		strings.ToLower(filepath.Join(HomeDir, ".ssh")),
+		strings.ToLower(filepath.Join(HomeDir, ".config")),
+		strings.ToLower(filepath.Join(HomeDir, ".bashrc")),
+		strings.ToLower(filepath.Join(HomeDir, ".zshrc")),
+		strings.ToLower(filepath.Join(HomeDir, ".profile")),
+	}
+	for _, hp := range homePrefixes {
+		if strings.HasPrefix(toCheckPathLower, hp) {
+			return true
+		}
+	}
+
+	// 特定的文件名（小写比较）
+	namePrefixes := []string{
+		strings.ToLower("credentials"),
+		strings.ToLower("id_"),
+	}
+	for _, np := range namePrefixes {
+		if strings.HasPrefix(toCheckNameLower, np) {
+			return true
+		}
+	}
+	return false
 }

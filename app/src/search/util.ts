@@ -15,7 +15,7 @@ import {onGet} from "../protyle/util/onGet";
 import {addLoading} from "../protyle/ui/initUI";
 import {getIconByType} from "../editor/getIcon";
 import {unicode2Emoji} from "../emoji";
-import {hasClosestByClassName, hasClosestByTag} from "../protyle/util/hasClosest";
+import {hasClosestBlock, hasClosestByClassName, hasClosestByTag} from "../protyle/util/hasClosest";
 import {isIPad, isNotCtrl, setStorageVal, updateHotkeyTip} from "../protyle/util/compatibility";
 import {newFileByName} from "../util/newFile";
 import {
@@ -45,6 +45,9 @@ import {getDefaultType} from "./getDefault";
 import {isSupportCSSHL, searchMarkRender} from "../protyle/render/searchMarkRender";
 import {saveKeyList, toggleAssetHistory, toggleReplaceHistory, toggleSearchHistory} from "./toggleHistory";
 import {highlightById} from "../util/highlightById";
+import {getSelectionOffset} from "../protyle/util/selection";
+import {electronUndo} from "../protyle/undo";
+import {getContenteditableElement} from "../protyle/wysiwyg/getBlock";
 
 export const openGlobalSearch = (app: App, text: string, replace: boolean, searchData?: Config.IUILayoutTabSearchConfig) => {
     text = text.trim();
@@ -73,7 +76,7 @@ export const openGlobalSearch = (app: App, text: string, replace: boolean, searc
             removed: localData.removed,
             page: 1
         },
-        position: (window.siyuan.layout.centerLayout.children.length > 1 || window.innerWidth > 1024) ? "right" : undefined
+        position: (!window.siyuan.config.fileTree.noSplitScreenWhenOpenTab && (window.siyuan.layout.centerLayout.children.length > 1 || window.innerWidth > 1024)) ? "right" : undefined
     });
 };
 
@@ -135,7 +138,7 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
                 <svg data-menu="true" class="b3-form__icon-icon"><use xlink:href="#iconSearch"></use></svg>
                 <svg class="search__arrowdown"><use xlink:href="#iconDown"></use></svg>
             </span>
-            <input id="searchInput" class="b3-text-field b3-text-field--text" placeholder="${window.siyuan.languages.showRecentUpdatedBlocks}">
+            <input id="searchInput" class="b3-text-field b3-text-field--text" placeholder="${window.siyuan.languages.showRecentUpdatedBlocks}" autocomplete="off" autocorrect="off" spellcheck="false">
         </div>
         <div class="block__icons">
             <span id="searchFilter" aria-label="${window.siyuan.languages.searchType}" class="block__icon ariaLabel" data-position="9south">
@@ -238,8 +241,10 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
     const edit = new Protyle(app, element.querySelector("#searchPreview") as HTMLElement, {
         blockId: "",
         render: {
+            background: true,
             gutter: true,
-            breadcrumbDocName: true
+            breadcrumbDocName: true,
+            title: true
         },
     });
     edit.resize();
@@ -247,7 +252,8 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
         blockId: "",
         render: {
             gutter: true,
-            breadcrumbDocName: true
+            breadcrumbDocName: true,
+            title: true
         },
     });
     unRefEdit.resize();
@@ -340,7 +346,7 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
         while (target && target !== element) {
             const type = target.getAttribute("data-type");
             if (type === "removeCriterion") {
-                updateConfig(element, {
+                config = updateConfig(element, {
                     removed: true,
                     sort: 0,
                     group: 0,
@@ -389,7 +395,7 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
                 target.classList.add("b3-chip--current");
                 criteriaData.find(item => {
                     if (item.name === target.innerText.trim()) {
-                        updateConfig(element, item, config, edit);
+                        config = updateConfig(element, item, config, edit);
                         return true;
                     }
                 });
@@ -406,7 +412,7 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
                     }
                 });
                 if (target.parentElement.classList.contains("b3-chip--current")) {
-                    updateConfig(element, {
+                    config = updateConfig(element, {
                         removed: true,
                         sort: 0,
                         group: 0,
@@ -459,37 +465,41 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
                 event.preventDefault();
                 break;
             } else if (target.id === "searchPath") {
-                movePathTo((toPath, toNotebook) => {
-                    fetchPost("/api/filetree/getHPathsByPaths", {paths: toPath}, (response) => {
-                        config.idPath = [];
-                        const hPathList: string[] = [];
-                        let enableIncludeChild = false;
-                        toPath.forEach((item, index) => {
-                            if (item === "/") {
-                                config.idPath.push(toNotebook[index]);
-                                hPathList.push(getNotebookName(toNotebook[index]));
-                            } else {
-                                enableIncludeChild = true;
-                                config.idPath.push(pathPosix().join(toNotebook[index], item.replace(".sy", "")));
+                movePathTo({
+                    cb: (toPath, toNotebook) => {
+                        fetchPost("/api/filetree/getHPathsByPaths", {paths: toPath}, (response) => {
+                            config.idPath = [];
+                            const hPathList: string[] = [];
+                            let enableIncludeChild = false;
+                            toPath.forEach((item, index) => {
+                                if (item === "/") {
+                                    config.idPath.push(toNotebook[index]);
+                                    hPathList.push(getNotebookName(toNotebook[index]));
+                                } else {
+                                    enableIncludeChild = true;
+                                    config.idPath.push(pathPosix().join(toNotebook[index], item.replace(".sy", "")));
+                                }
+                            });
+                            if (response.data) {
+                                hPathList.push(...response.data);
                             }
+                            config.hPath = hPathList.join(" ");
+                            config.page = 1;
+                            searchPathInputElement.innerHTML = `${escapeGreat(config.hPath)}<svg class="search__rmpath"><use xlink:href="#iconCloseRound"></use></svg>`;
+                            searchPathInputElement.setAttribute("aria-label", escapeHtml(config.hPath));
+                            const includeElement = element.querySelector("#searchInclude");
+                            includeElement.firstElementChild.classList.add("ft__primary");
+                            if (enableIncludeChild) {
+                                includeElement.removeAttribute("disabled");
+                            } else {
+                                includeElement.setAttribute("disabled", "disabled");
+                            }
+                            inputEvent(element, config, edit, true);
                         });
-                        if (response.data) {
-                            hPathList.push(...response.data);
-                        }
-                        config.hPath = hPathList.join(" ");
-                        config.page = 1;
-                        searchPathInputElement.innerHTML = `${escapeGreat(config.hPath)}<svg class="search__rmpath"><use xlink:href="#iconCloseRound"></use></svg>`;
-                        searchPathInputElement.setAttribute("aria-label", escapeHtml(config.hPath));
-                        const includeElement = element.querySelector("#searchInclude");
-                        includeElement.firstElementChild.classList.add("ft__primary");
-                        if (enableIncludeChild) {
-                            includeElement.removeAttribute("disabled");
-                        } else {
-                            includeElement.setAttribute("disabled", "disabled");
-                        }
-                        inputEvent(element, config, edit, true);
-                    });
-                }, [], undefined, window.siyuan.languages.specifyPath);
+                    },
+                    title: window.siyuan.languages.specifyPath,
+                    flashcard: false
+                });
                 event.stopPropagation();
                 event.preventDefault();
                 break;
@@ -521,6 +531,7 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
                 // ctrl+P 不需要保存
                 config.hasReplace = !config.hasReplace;
                 element.querySelectorAll(".search__header")[1].classList.toggle("fn__none");
+                element.querySelector("#criteria .b3-chip--current")?.classList.remove("b3-chip--current");
                 event.stopPropagation();
                 event.preventDefault();
                 break;
@@ -583,7 +594,7 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
                 openFile({
                     app,
                     searchData: config,
-                    position: (window.siyuan.layout.centerLayout.children.length > 1 || window.innerWidth > 1024) ? "right" : undefined
+                    position: (!window.siyuan.config.fileTree.noSplitScreenWhenOpenTab && (window.siyuan.layout.centerLayout.children.length > 1 || window.innerWidth > 1024)) ? "right" : undefined
                 });
                 if (closeCB) {
                     closeCB();
@@ -601,7 +612,7 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
                     config.page = 1;
                     inputEvent(element, config, edit, true);
                 }, () => {
-                    updateConfig(element, {
+                    config = updateConfig(element, {
                         removed: true,
                         sort: 0,
                         group: 0,
@@ -737,6 +748,8 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
                     element.querySelector("#searchSyntaxCheck").outerHTML = genQueryHTML(config.method, "searchSyntaxCheck");
                     config.page = 1;
                     inputEvent(element, config, edit, true);
+                    window.siyuan.storage[Constants.LOCAL_SEARCHDATA] = JSON.parse(JSON.stringify(config));
+                    setStorageVal(Constants.LOCAL_SEARCHDATA, window.siyuan.storage[Constants.LOCAL_SEARCHDATA]);
                 });
                 const rect = target.getBoundingClientRect();
                 window.siyuan.menus.menu.popup({x: rect.right, y: rect.bottom, isLeft: true});
@@ -811,18 +824,12 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
                                 }
                             } else {
                                 if (event.altKey) {
-                                    const id = target.getAttribute("data-node-id");
-                                    checkFold(id, (zoomIn, action) => {
-                                        openFileById({
-                                            app,
-                                            id,
-                                            action,
-                                            zoomIn,
-                                            position: "right"
-                                        });
-                                        if (closeCB) {
-                                            closeCB();
-                                        }
+                                    openSearchEditor({
+                                        rootId: target.getAttribute("data-root-id"),
+                                        protyle: edit.protyle,
+                                        id: target.getAttribute("data-node-id"),
+                                        cb: closeCB,
+                                        openPosition: "right",
                                     });
                                 } else if (!target.classList.contains("b3-list-item--focus")) {
                                     (searchType === "doc" ? searchPanelElement : unRefPanelElement).querySelector(".b3-list-item--focus").classList.remove("b3-list-item--focus");
@@ -851,17 +858,11 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
                             useShell("showItemInFolder", path.join(window.siyuan.config.system.dataDir, target.lastElementChild.getAttribute("aria-label")));
                             /// #endif
                         } else {
-                            const id = target.getAttribute("data-node-id");
-                            checkFold(id, (zoomIn, action) => {
-                                openFileById({
-                                    app,
-                                    id,
-                                    action,
-                                    zoomIn
-                                });
-                                if (closeCB) {
-                                    closeCB();
-                                }
+                            openSearchEditor({
+                                rootId: target.getAttribute("data-root-id"),
+                                protyle: edit.protyle,
+                                id: target.getAttribute("data-node-id"),
+                                cb: closeCB
                             });
                         }
                     }
@@ -895,10 +896,16 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
     searchInputElement.addEventListener("blur", () => {
         if (config.removed) {
             config.k = searchInputElement.value;
-            window.siyuan.storage[Constants.LOCAL_SEARCHDATA] = Object.assign({}, config);
+            window.siyuan.storage[Constants.LOCAL_SEARCHDATA] = JSON.parse(JSON.stringify(config));
             setStorageVal(Constants.LOCAL_SEARCHDATA, window.siyuan.storage[Constants.LOCAL_SEARCHDATA]);
         }
         saveKeyList("keys", searchInputElement.value);
+    });
+    searchInputElement.addEventListener("keydown", (event) => {
+        electronUndo(event);
+    });
+    replaceInputElement.addEventListener("keydown", (event) => {
+        electronUndo(event);
     });
     addClearButton({
         inputElement: searchInputElement,
@@ -916,6 +923,55 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
     });
     inputEvent(element, config, edit);
     return {edit, unRefEdit};
+};
+
+export const openSearchEditor = (options: {
+    protyle: IProtyle,
+    openPosition?: string,
+    id: string,
+    rootId: string,
+    cb: () => void
+}) => {
+    let currentRange = (options.rootId === options.protyle.block.rootID && options.id === options.protyle.block.id) ?
+        options.protyle.highlight.ranges[options.protyle.highlight.rangeIndex] : null;
+    if (options.protyle.block.scroll) {
+        currentRange = null;
+    }
+    if (currentRange) {
+        const rangeBlockElement = hasClosestBlock(currentRange.startContainer);
+        if (rangeBlockElement) {
+            options.id = rangeBlockElement.getAttribute("data-node-id");
+            const offset = getSelectionOffset(getContenteditableElement(rangeBlockElement) || rangeBlockElement,
+                null, options.protyle.highlight.ranges[options.protyle.highlight.rangeIndex]);
+            const scrollAttr: IScrollAttr = {
+                rootId: options.protyle.block.rootID,
+                focusId: options.id,
+                focusStart: offset.start,
+                focusEnd: offset.end,
+                zoomInId: options.protyle.block.showAll ? options.protyle.block.id : undefined,
+                scrollTop: options.protyle.contentElement.scrollTop,
+            };
+            window.siyuan.storage[Constants.LOCAL_FILEPOSITION][options.protyle.block.rootID] = scrollAttr;
+            if (offset.start === offset.end) {
+                currentRange = null;
+            }
+        }
+    }
+    checkFold(options.id, (zoomIn) => {
+        openFileById({
+            app: options.protyle.app,
+            id: options.id,
+            action: currentRange ?
+                (zoomIn ? [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL, Constants.CB_GET_SCROLL, Constants.CB_GET_SEARCH] : [Constants.CB_GET_FOCUS, Constants.CB_GET_CONTEXT, Constants.CB_GET_SCROLL, Constants.CB_GET_SEARCH]) :
+                (zoomIn ? [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL, Constants.CB_GET_HL] : [Constants.CB_GET_FOCUS, Constants.CB_GET_CONTEXT, Constants.CB_GET_HL]),
+            zoomIn,
+            position: options.openPosition,
+            scrollPosition: "center"
+        });
+        if (options.cb) {
+            options.cb();
+        }
+    });
 };
 
 export const genQueryHTML = (method: number, id: string) => {
@@ -950,7 +1006,7 @@ export const updateConfig = (element: Element, item: Config.IUILayoutTabSearchCo
     if (dialogElement && dialogElement.getAttribute("data-key") === Constants.DIALOG_SEARCH) {
         // https://github.com/siyuan-note/siyuan/issues/6828
         item.hPath = config.hPath;
-        item.idPath = config.idPath.join(",").split(",");
+        item.idPath = [...config.idPath];
     }
     if (config.hasReplace !== item.hasReplace) {
         const replaceHeaderElement = element.querySelectorAll(".search__header")[1];
@@ -977,11 +1033,11 @@ export const updateConfig = (element: Element, item: Config.IUILayoutTabSearchCo
     }
     let includeChild = true;
     let enableIncludeChild = false;
-    item.idPath.forEach(item => {
-        if (item.endsWith(".sy")) {
+    item.idPath.forEach(pathItem => {
+        if (pathItem.endsWith(".sy")) {
             includeChild = false;
         }
-        if (item.split("/").length > 1) {
+        if (pathItem.split("/").length > 1) {
             enableIncludeChild = true;
         }
     });
@@ -1001,11 +1057,12 @@ export const updateConfig = (element: Element, item: Config.IUILayoutTabSearchCo
     }
     (element.querySelector("#replaceInput") as HTMLInputElement).value = item.r;
     element.querySelector("#searchSyntaxCheck").outerHTML = genQueryHTML(item.method, "searchSyntaxCheck");
-    Object.assign(config, item);
-    window.siyuan.storage[Constants.LOCAL_SEARCHDATA] = Object.assign({}, config);
+    config = JSON.parse(JSON.stringify(item));
+    window.siyuan.storage[Constants.LOCAL_SEARCHDATA] = JSON.parse(JSON.stringify(item));
     setStorageVal(Constants.LOCAL_SEARCHDATA, window.siyuan.storage[Constants.LOCAL_SEARCHDATA]);
     inputEvent(element, config, edit);
     window.siyuan.menus.menu.remove();
+    return config;
 };
 
 const scrollToCurrent = (contentElement: HTMLElement, currentRange: Range, contentRect: DOMRect) => {
@@ -1047,7 +1104,7 @@ const renderNextSearchMark = (options: {
         });
         if (currentRange) {
             if (!currentRange.toString()) {
-                highlightById(options.edit.protyle, options.id);
+                highlightById(options.edit.protyle, options.id, "center");
             } else {
                 scrollToCurrent(options.edit.protyle.contentElement, currentRange, contentRect);
             }
@@ -1093,7 +1150,6 @@ export const getArticle = (options: {
             if (articleId !== options.id) {
                 return;
             }
-            options.edit.protyle.wysiwyg.renderCustom(response.data.ial);
             fetchPost("/api/filetree/getDoc", {
                 id: options.id,
                 query: options.value || null,
@@ -1112,44 +1168,57 @@ export const getArticle = (options: {
                     method: options.config?.method || null,
                     types: options.config?.types || null,
                 };
+                // https://ld246.com/article/1770132984152
+                if (options.edit.protyle.options.render.title) {
+                    options.edit.protyle.wysiwyg.renderCustom(response.data.ial);
+                }
                 onGet({
                     updateReadonly: true,
                     data: getResponse,
                     protyle: options.edit.protyle,
                     action: zoomIn ? [Constants.CB_GET_ALL, Constants.CB_GET_HTML] : [Constants.CB_GET_HTML],
-                });
-
-                const contentRect = options.edit.protyle.contentElement.getBoundingClientRect();
-                if (isSupportCSSHL()) {
-                    searchMarkRender(options.edit.protyle, getResponse.data.keywords, options.id, () => {
-                        const highlightKeys = () => {
-                            const currentRange = options.edit.protyle.highlight.ranges[options.edit.protyle.highlight.rangeIndex];
-                            if (options.edit.protyle.highlight.ranges.length > 0 && currentRange) {
-                                if (!currentRange.toString()) {
-                                    highlightById(options.edit.protyle, options.id);
-                                } else {
-                                    scrollToCurrent(options.edit.protyle.contentElement, currentRange, contentRect);
+                    afterCB() {
+                        const contentRect = options.edit.protyle.contentElement.getBoundingClientRect();
+                        if (isSupportCSSHL()) {
+                            let observer: ResizeObserver;
+                            searchMarkRender(options.edit.protyle, getResponse.data.keywords, options.id, () => {
+                                const highlightKeys = () => {
+                                    const currentRange = options.edit.protyle.highlight.ranges[options.edit.protyle.highlight.rangeIndex];
+                                    if (options.edit.protyle.highlight.ranges.length > 0 && currentRange) {
+                                        if (!currentRange.toString()) {
+                                            highlightById(options.edit.protyle, options.id, "center");
+                                        } else {
+                                            scrollToCurrent(options.edit.protyle.contentElement, currentRange, contentRect);
+                                        }
+                                    } else {
+                                        highlightById(options.edit.protyle, options.id, "center");
+                                    }
+                                };
+                                if (observer) {
+                                    observer.disconnect();
                                 }
-                            } else {
-                                highlightById(options.edit.protyle, options.id);
+                                highlightKeys();
+                                observer = new ResizeObserver(() => {
+                                    highlightKeys();
+                                });
+                                observer.observe(options.edit.protyle.wysiwyg.element);
+                                setTimeout(() => {
+                                    observer.disconnect();
+                                }, Constants.TIMEOUT_COUNT);
+                            });
+                        } else {
+                            const matchElements = options.edit.protyle.wysiwyg.element.querySelectorAll('span[data-type~="search-mark"]');
+                            if (matchElements.length === 0) {
+                                return;
                             }
-                        };
-                        highlightKeys();
-                        const observer = new ResizeObserver(() => {
-                            highlightKeys();
-                        });
-                        observer.observe(options.edit.protyle.wysiwyg.element);
-                        setTimeout(() => {
-                            observer.disconnect();
-                        }, Constants.TIMEOUT_COUNT);
-                    });
-                } else {
-                    const matchElements = options.edit.protyle.wysiwyg.element.querySelectorAll('span[data-type~="search-mark"]');
-                    if (matchElements.length === 0) {
-                        return;
+                            matchElements[0].classList.add("search-mark--hl");
+                            options.edit.protyle.contentElement.scrollTop = options.edit.protyle.contentElement.scrollTop + matchElements[0].getBoundingClientRect().top - contentRect.top - contentRect.height / 2;
+                        }
                     }
-                    matchElements[0].classList.add("search-mark--hl");
-                    options.edit.protyle.contentElement.scrollTop = options.edit.protyle.contentElement.scrollTop + matchElements[0].getBoundingClientRect().top - contentRect.top - contentRect.height / 2;
+                });
+                // 只能放在 onGet 后，否则 title 不会更新 https://github.com/siyuan-note/siyuan/issues/16739
+                if (options.edit.protyle.options.render.title) {
+                    options.edit.protyle.title.render(options.edit.protyle, response);
                 }
             });
         });
@@ -1423,7 +1492,11 @@ ${countHTML}
         const currentList = element.querySelector(`[data-node-id="${currentData.id}"]`) as HTMLElement;
         if (currentList) {
             currentList.classList.add("b3-list-item--focus");
-            currentList.scrollIntoView();
+            if (!currentList.previousElementSibling && currentList.parentElement.previousElementSibling) {
+                currentList.parentElement.previousElementSibling.scrollIntoView();
+            } else {
+                currentList.scrollIntoView();
+            }
         }
     }
 };

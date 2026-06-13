@@ -25,7 +25,10 @@
 </p>
 
 <p align="center">
-<a href="README.md">English</a> | <a href="README_zh_CN.md">中文</a>
+<a href="README.md">English</a>
+| <a href="README_zh_CN.md">中文</a>
+| <b>日本語</b>
+| <a href="README_tr_TR.md">Türkçe</a>
 </p>
 
 ---
@@ -40,8 +43,10 @@
 * [🚀 ダウンロードとセットアップ](#-ダウンロードとセットアップ)
   * [アプリマーケット](#アプリマーケット)
   * [インストールパッケージ](#インストールパッケージ)
+  * [パッケージマネージャー](#パッケージマネージャー)
   * [Docker ホスティング](#docker-ホスティング)
   * [Unraid ホスティング](#unraid-ホスティング)
+  * [TrueNas ホスティング](#truenas-ホスティング)
   * [インサイダープレビュー](#インサイダープレビュー)
 * [🏘️ コミュニティ](#️-コミュニティ)
 * [🛠️ 開発ガイド](#️-開発ガイド)
@@ -64,9 +69,9 @@ SiYuanは、プライバシーを最優先とする個人の知識管理シス�
 
 詳細については、[SiYuan英語ディスカッションフォーラム](https://liuyun.io)をご覧ください。
 
-![feature0.png](https://b3logfile.com/file/2024/01/feature0-1orBRlI.png)
+![feature0.png](https://b3logfile.com/file/2025/11/feature0-GfbhEqf.png)
 
-![feature51.png](https://b3logfile.com/file/2024/02/feature5-1-uYYjAqy.png)
+![feature51.png](https://b3logfile.com/file/2025/11/feature5-1-7DJSfEP.png)
 
 ## 🔮 特徴
 
@@ -157,6 +162,16 @@ SiYuanは、プライバシーを最優先とする個人の知識管理シス�
 
 * [B3log](https://b3log.org/siyuan/en/download.html)
 * [GitHub](https://github.com/siyuan-note/siyuan/releases)
+
+### パッケージマネージャー
+
+#### `siyuan`
+
+[![梱包状態](https://repology.org/badge/vertical-allrepos/siyuan.svg)](https://repology.org/project/siyuan/versions)
+
+#### `siyuan-note`
+
+[![梱包状態](https://repology.org/badge/vertical-allrepos/siyuan-note.svg)](https://repology.org/project/siyuan-note/versions)
 
 ### Docker ホスティング
 
@@ -297,6 +312,42 @@ Host path: /mnt/user/appdata/siyuan
 PUID: 1000
 PGID: 1000
 Publish parameters: --accessAuthCode=******（アクセス認証コード）
+```
+
+</details>
+
+### TrueNas ホスティング
+
+<details>
+<summary>TrueNasデプロイメント</summary>
+
+注意：まず TrueNAS Shell で以下のコマンドを実行してください。`Pool_1/Apps_Data/siyuan` をアプリ用のデータセットパスに合わせて更新してください。
+
+```shell
+zfs create Pool_1/Apps_Data/siyuan
+chown -R 1001:1002 /mnt/Pool_1/Apps_Data/siyuan
+chmod 755 /mnt/Pool_1/Apps_Data/siyuan
+```
+
+Apps - DiscoverApps - More Options（右上、Custom App を除く）- YAML でインストール に移動してください
+
+テンプレート例：
+
+```yaml
+services:
+  siyuan:
+    image: b3log/siyuan
+    container_name: siyuan
+    command: ['--workspace=/siyuan/workspace/', '--accessAuthCode=2222']
+    ports:
+      - 6806:6806
+    volumes:
+      - /mnt/Pool_1/Apps_Data/siyuan:/siyuan/workspace  # Adjust to your dataset path 
+    restart: unless-stopped
+    environment:
+      - TZ=America/Los_Angeles  # Replace with your timezone if needed
+      - PUID=1001
+      - PGID=1002
 ```
 
 </details>

@@ -20,7 +20,7 @@ import {openFileById} from "../../editor/util";
 import {setTitle} from "../../dialog/processSystem";
 import {getContenteditableElement, getNoContainerElement} from "../wysiwyg/getBlock";
 import {commonHotkey} from "../wysiwyg/commonHotkey";
-import {code160to32} from "../util/code160to32";
+import {nbsp2space} from "../util/normalizeText";
 import {genEmptyElement} from "../../block/util";
 import {transaction} from "../wysiwyg/transaction";
 import {hideTooltip} from "../../dialog/tooltip";
@@ -91,7 +91,7 @@ export class Title {
                 event.stopPropagation();
                 event.preventDefault();
             });
-            this.editElement.addEventListener("keydown", (event: KeyboardEvent) => {
+            this.editElement.addEventListener("keydown", async (event: KeyboardEvent) => {
                 if (event.isComposing) {
                     return;
                 }
@@ -100,9 +100,16 @@ export class Title {
                     return true;
                 }
                 if (matchHotKey("⇧⌘V", event)) {
-                    navigator.clipboard.readText().then(textPlain => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    let textPlain = await readText() || "";
+                    if (textPlain) {
+                        // 对 <<assets/...>> 进行内部转义 https://github.com/siyuan-note/siyuan/issues/11992
+                        textPlain = textPlain.replace(/<<assets\//g, "__@lt2assets/@__").replace(/>>/g, "__@gt2@__");
                         // 对 HTML 标签进行内部转义，避免被 Lute 解析以后变为小写 https://github.com/siyuan-note/siyuan/issues/10620
                         textPlain = textPlain.replace(/</g, ";;;lt;;;").replace(/>/g, ";;;gt;;;");
+                        // 反转义 <<assets/...>>
+                        textPlain = textPlain.replace(/__@lt2assets\/@__/g, "<<assets/").replace(/__@gt2@__/g, ">>");
                         enableLuteMarkdownSyntax(protyle);
                         let content = protyle.lute.BlockDOM2EscapeMarkerContent(protyle.lute.Md2BlockDOM(textPlain));
                         restoreLuteMarkdownSyntax(protyle);
@@ -110,9 +117,8 @@ export class Title {
                         content = content.replace(/;;;lt;;;[^;]+;;;gt;;;/g, "");
                         document.execCommand("insertText", false, replaceFileName(content));
                         this.rename(protyle);
-                    });
-                    event.preventDefault();
-                    event.stopPropagation();
+                    }
+                    return;
                 }
                 if (matchHotKey(window.siyuan.config.keymap.general.enterBack.custom, event)) {
                     const ids = protyle.path.split("/");
@@ -181,9 +187,10 @@ export class Title {
                     event.stopPropagation();
                 }
             });
-            const iconElement = this.element.querySelector(".protyle-title__icon");
-            iconElement.addEventListener("click", () => {
-                if (window.siyuan.shiftIsPressed) {
+            const iconElement = this.element.querySelector(".protyle-title__icon") as HTMLElement;
+            iconElement.addEventListener("click", (event) => {
+                // 不使用 window.siyuan.shiftIsPressed ，否则窗口未激活时按 Shift 点击块标无法打开属性面板 https://github.com/siyuan-note/siyuan/issues/15075
+                if (event.shiftKey) {
                     fetchPost("/api/block/getDocInfo", {
                         id: protyle.block.rootID
                     }, (response) => {
@@ -191,15 +198,15 @@ export class Title {
                     });
                 } else {
                     const iconRect = iconElement.getBoundingClientRect();
-                    openTitleMenu(protyle, {x: iconRect.left, y: iconRect.bottom});
+                    openTitleMenu(protyle, {x: iconRect.left, y: iconRect.bottom}, Constants.MENU_FROM_TITLE_PROTYLE);
                 }
             });
             this.element.addEventListener("contextmenu", (event) => {
                 if (event.shiftKey) {
                     return;
                 }
-                if (getSelection().rangeCount === 0) {
-                    openTitleMenu(protyle, {x: event.clientX, y: event.clientY});
+                if (getSelection().rangeCount === 0 || iconElement.contains((event.target as HTMLElement))) {
+                    openTitleMenu(protyle, {x: event.clientX, y: event.clientY}, Constants.MENU_FROM_TITLE_PROTYLE);
                     return;
                 }
                 protyle.toolbar?.element.classList.add("fn__none");
@@ -255,7 +262,7 @@ export class Title {
                             document.execCommand("paste");
                         } else {
                             try {
-                                const text = await readText();
+                                const text = await readText() || "";
                                 document.execCommand("insertText", false, replaceFileName(text));
                                 this.rename(protyle);
                             } catch (e) {
@@ -269,16 +276,17 @@ export class Title {
                     label: window.siyuan.languages.pasteAsPlainText,
                     accelerator: "⇧⌘V",
                     click: async () => {
-                        navigator.clipboard.readText().then(textPlain => {
-                            textPlain = textPlain.replace(/</g, ";;;lt;;;").replace(/>/g, ";;;gt;;;");
-                            enableLuteMarkdownSyntax(protyle);
-                            let content = protyle.lute.BlockDOM2EscapeMarkerContent(protyle.lute.Md2BlockDOM(textPlain));
-                            restoreLuteMarkdownSyntax(protyle);
-                            // 移除 ;;;lt;;; 和 ;;;gt;;; 转义及其包裹的内容
-                            content = content.replace(/;;;lt;;;[^;]+;;;gt;;;/g, "");
-                            document.execCommand("insertText", false, replaceFileName(content));
-                            this.rename(protyle);
-                        });
+                        let textPlain = await readText() || "";
+                        textPlain = textPlain.replace(/<<assets\//g, "__@lt2assets/@__").replace(/>>/g, "__@gt2@__");
+                        textPlain = textPlain.replace(/</g, ";;;lt;;;").replace(/>/g, ";;;gt;;;");
+                        textPlain = textPlain.replace(/__@lt2assets\/@__/g, "<<assets/").replace(/__@gt2@__/g, ">>");
+                        enableLuteMarkdownSyntax(protyle);
+                        let content = protyle.lute.BlockDOM2EscapeMarkerContent(protyle.lute.Md2BlockDOM(textPlain));
+                        restoreLuteMarkdownSyntax(protyle);
+                        // 移除 ;;;lt;;; 和 ;;;gt;;; 转义及其包裹的内容
+                        content = content.replace(/;;;lt;;;[^;]+;;;gt;;;/g, "");
+                        document.execCommand("insertText", false, replaceFileName(content));
+                        this.rename(protyle);
                     }
                 }).element);
                 window.siyuan.menus.menu.append(new MenuItem({
@@ -331,35 +339,35 @@ export class Title {
         }, Constants.TIMEOUT_INPUT);
     }
 
-    public setTitle(title: string) {
+    public setTitle(title: string, empty = false) {
         /// #if MOBILE
         if (this.editElement) {
-            if (code160to32(title) !== code160to32(this.editElement.textContent)) {
-                this.editElement.textContent = title === window.siyuan.languages.untitled ? "" : title;
+            if (nbsp2space(title) !== nbsp2space(this.editElement.textContent)) {
+                this.editElement.textContent = empty ? "" : title;
             }
         } else {
             const inputElement = document.getElementById("toolbarName") as HTMLInputElement;
-            if (code160to32(title) !== code160to32(inputElement.value)) {
-                inputElement.value = title === window.siyuan.languages.untitled ? "" : title;
+            if (nbsp2space(title) !== nbsp2space(inputElement.value)) {
+                inputElement.value = empty ? "" : title;
             }
         }
         /// #else
-        if (code160to32(title) !== code160to32(this.editElement.textContent)) {
-            this.editElement.textContent = title === window.siyuan.languages.untitled ? "" : title;
+        if (nbsp2space(title) !== nbsp2space(this.editElement.textContent)) {
+            this.editElement.textContent = empty ? "" : title;
         }
         /// #endif
     }
 
     public render(protyle: IProtyle, response: IWebSocketData) {
-        if (this.element.getAttribute("data-render") === "true") {
-            return false;
-        }
         if (protyle.options.render.hideTitleOnZoom) {
             if (protyle.block.showAll) {
                 this.element.classList.add("fn__none");
             } else {
                 this.element.classList.remove("fn__none");
             }
+        }
+        if (this.element.getAttribute("data-render") === "true" && this.element.dataset.nodeId === protyle.block.rootID) {
+            return false;
         }
         this.element.setAttribute("data-node-id", protyle.block.rootID);
         if (response.data.ial[Constants.CUSTOM_RIFF_DECKS]) {
@@ -368,7 +376,7 @@ export class Title {
         protyle.background?.render(response.data.ial, protyle.block.rootID);
         protyle.wysiwyg.renderCustom(response.data.ial);
         this.element.setAttribute("data-render", "true");
-        this.setTitle(response.data.ial.title);
+        this.setTitle(response.data.ial.title, response.data.ial[Constants.CUSTOM_SY_TITLE_EMPTY] === "true");
         let nodeAttrHTML = "";
         if (response.data.ial.bookmark) {
             nodeAttrHTML += `<div class="protyle-attr--bookmark">${Lute.EscapeHTMLStr(response.data.ial.bookmark)}</div>`;
@@ -380,7 +388,7 @@ export class Title {
             nodeAttrHTML += `<div class="protyle-attr--alias"><svg><use xlink:href="#iconA"></use></svg>${Lute.EscapeHTMLStr(response.data.ial.alias)}</div>`;
         }
         if (response.data.ial.memo) {
-            nodeAttrHTML += `<div class="protyle-attr--memo b3-tooltips b3-tooltips__sw" aria-label="${Lute.EscapeHTMLStr(response.data.ial.memo)}"><svg><use xlink:href="#iconM"></use></svg></div>`;
+            nodeAttrHTML += `<div class="protyle-attr--memo ariaLabel" aria-label="${Lute.EscapeHTMLStr(response.data.ial.memo)}" data-position="north"><svg><use xlink:href="#iconM"></use></svg></div>`;
         }
         if (response.data.ial["custom-avs"]) {
             let avTitle = "";

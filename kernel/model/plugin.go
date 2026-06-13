@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/88250/gulu"
@@ -27,6 +29,7 @@ import (
 	"github.com/siyuan-note/logging"
 	"github.com/siyuan-note/siyuan/kernel/bazaar"
 	"github.com/siyuan-note/siyuan/kernel/util"
+	"golang.org/x/sync/singleflight"
 )
 
 // Petal represents a plugin's management status.
@@ -36,16 +39,17 @@ type Petal struct {
 	Enabled           bool   `json:"enabled"`           // Whether enabled
 	Incompatible      bool   `json:"incompatible"`      // Whether incompatible
 	DisabledInPublish bool   `json:"disabledInPublish"` // Whether disabled in publish mode
+	DisallowInstall   bool   `json:"disallowInstall"`   // Whether disallow install
 
-	JS   string                 `json:"js"`   // JS code
-	CSS  string                 `json:"css"`  // CSS code
-	I18n map[string]interface{} `json:"i18n"` // i18n text
+	JS   string         `json:"js"`   // JS code
+	CSS  string         `json:"css"`  // CSS code
+	I18n map[string]any `json:"i18n"` // i18n text
 }
 
-func SetPetalEnabled(name string, enabled bool, frontend string) (ret *Petal, err error) {
+func SetPetalEnabled(name string, enabled bool) (ret *Petal, err error) {
 	petals := getPetals()
 
-	found, displayName, incompatible, disabledInPublish := bazaar.ParseInstalledPlugin(name, frontend)
+	found, displayName, incompatible, disabledInPublish, disallowInstall := bazaar.ParseInstalledPlugin(name, "")
 	if !found {
 		logging.LogErrorf("plugin [%s] not found", name)
 		return
@@ -62,10 +66,11 @@ func SetPetalEnabled(name string, enabled bool, frontend string) (ret *Petal, er
 	ret.Enabled = enabled
 	ret.Incompatible = incompatible
 	ret.DisabledInPublish = disabledInPublish
+	ret.DisallowInstall = disallowInstall
 
-	if incompatible {
-		err = fmt.Errorf(Conf.Language(205))
-		logging.LogInfof("plugin [%s] is incompatible [%s]", name, frontend)
+	if enabled && disallowInstall {
+		err = fmt.Errorf("require upgrade SiYuan to use this plugin [%s]", name)
+		logging.LogInfof("require upgrade SiYuan to use this plugin [%s]", name)
 		return
 	}
 
@@ -74,7 +79,31 @@ func SetPetalEnabled(name string, enabled bool, frontend string) (ret *Petal, er
 	return
 }
 
+func getPetalByName(name string, petals []*Petal) (ret *Petal) {
+	for _, p := range petals {
+		if name == p.Name {
+			ret = p
+			break
+		}
+	}
+	return
+}
+
+var loadPetalsFlight singleflight.Group
+
 func LoadPetals(frontend string, isPublish bool) (ret []*Petal) {
+	// 调用 setPetalEnabled 接口之后推送消息到所有前端实例，接着会同时调用 loadPetals 接口，合并相同类型的请求为一次执行
+	key := "loadPetals:" + frontend + ":" + strconv.FormatBool(isPublish)
+	v, err, _ := loadPetalsFlight.Do(key, func() (any, error) {
+		return loadPetals(frontend, isPublish), nil
+	})
+	if err != nil {
+		return []*Petal{}
+	}
+	return v.([]*Petal)
+}
+
+func loadPetals(frontend string, isPublish bool) (ret []*Petal) {
 	ret = []*Petal{}
 
 	if Conf.Bazaar.PetalDisabled {
@@ -88,21 +117,24 @@ func LoadPetals(frontend string, isPublish bool) (ret []*Petal) {
 		}
 	}
 
+	var petalNames []string
 	petals := getPetals()
 	for _, petal := range petals {
-		installPath := filepath.Join(util.DataDir, "plugins", petal.Name)
-		if !filelock.IsExist(installPath) {
-			continue
-		}
-
-		_, petal.DisplayName, petal.Incompatible, petal.DisabledInPublish = bazaar.ParseInstalledPlugin(petal.Name, frontend)
-		if !petal.Enabled || petal.Incompatible || (isPublish && petal.DisabledInPublish) {
+		_, petal.DisplayName, petal.Incompatible, petal.DisabledInPublish, petal.DisallowInstall = bazaar.ParseInstalledPlugin(petal.Name, frontend)
+		if !petal.Enabled || petal.Incompatible || (isPublish && petal.DisabledInPublish) || petal.DisallowInstall {
+			if petal.DisallowInstall {
+				SetPetalEnabled(petal.Name, false)
+				logging.LogInfof("plugin [%s] disallowed install, auto disabled", petal.Name)
+			}
 			continue
 		}
 
 		loadCode(petal)
 		ret = append(ret, petal)
+		petalNames = append(petalNames, petal.Name)
 	}
+
+	logging.LogDebugf("loaded petals [frontend=%s, isPublish=%v, petals=[%s]]", frontend, isPublish, strings.Join(petalNames, ","))
 	return
 }
 
@@ -157,10 +189,6 @@ func loadCode(petal *Petal) {
 			if !foundPreferredLang {
 				if foundEnUS {
 					preferredLang = "en_US.json"
-					if "zh_CHT" == Conf.Lang && foundZhCN {
-						// Improve marketplace package for traditional Chinese https://github.com/siyuan-note/siyuan/issues/8342
-						preferredLang = "zh_CN.json"
-					}
 				} else if foundZhCN {
 					preferredLang = "zh_CN.json"
 				} else {
@@ -173,7 +201,7 @@ func loadCode(petal *Petal) {
 				if err != nil {
 					logging.LogErrorf("read plugin [%s] i18n failed: %s", petal.Name, err)
 				} else {
-					petal.I18n = map[string]interface{}{}
+					petal.I18n = map[string]any{}
 					if err = gulu.JSON.UnmarshalJSON(data, &petal.I18n); err != nil {
 						logging.LogErrorf("unmarshal plugin [%s] i18n failed: %s", petal.Name, err)
 					}
@@ -248,8 +276,12 @@ func getPetals() (ret []*Petal) {
 	var tmp []*Petal
 	pluginsDir := filepath.Join(util.DataDir, "plugins")
 	for _, petal := range ret {
-		if petal.Enabled && filelock.IsExist(filepath.Join(pluginsDir, petal.Name)) {
+		pluginJSONPath := filepath.Join(pluginsDir, petal.Name, "plugin.json")
+		if filelock.IsExist(pluginJSONPath) {
 			tmp = append(tmp, petal)
+		} else {
+			// 插件不存在时，删除对应的持久化信息
+			bazaar.RemovePackageInfo("plugins", petal.Name)
 		}
 	}
 	if len(tmp) != len(ret) {
@@ -258,16 +290,6 @@ func getPetals() (ret []*Petal) {
 	}
 	if 1 > len(ret) {
 		ret = []*Petal{}
-	}
-	return
-}
-
-func getPetalByName(name string, petals []*Petal) (ret *Petal) {
-	for _, p := range petals {
-		if name == p.Name {
-			ret = p
-			break
-		}
 	}
 	return
 }

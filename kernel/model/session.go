@@ -46,7 +46,7 @@ func LogoutAuth(c *gin.Context) {
 	if "" == Conf.AccessAuthCode {
 		ret.Code = -1
 		ret.Msg = Conf.Language(86)
-		ret.Data = map[string]interface{}{"closeTimeout": 5000}
+		ret.Data = map[string]any{"closeTimeout": 5000}
 		return
 	}
 
@@ -54,9 +54,13 @@ func LogoutAuth(c *gin.Context) {
 	util.RemoveWorkspaceSession(session)
 	if err := session.Save(c); err != nil {
 		logging.LogErrorf("saves session failed: " + err.Error())
-		ret.Code = -1
-		ret.Msg = "save session failed"
+		session.Clear(c)
+		ret.Code = 1
+		ret.Msg = Conf.Language(258)
+		return
 	}
+
+	util.BroadcastByType("main", "logoutAuth", 0, "", nil)
 }
 
 func LoginAuth(c *gin.Context) {
@@ -95,7 +99,9 @@ func LoginAuth(c *gin.Context) {
 			workspaceSession.Captcha = gulu.Rand.String(7) // https://github.com/siyuan-note/siyuan/issues/13147
 			if err := session.Save(c); err != nil {
 				logging.LogErrorf("save session failed: " + err.Error())
-				c.Status(http.StatusInternalServerError)
+				session.Clear(c)
+				ret.Code = 1
+				ret.Msg = Conf.Language(258)
 				return
 			}
 			return
@@ -103,8 +109,8 @@ func LoginAuth(c *gin.Context) {
 	}
 
 	authCode := arg["authCode"].(string)
-	authCode = strings.TrimSpace(authCode)
 	authCode = util.RemoveInvalid(authCode)
+	authCode = strings.TrimSpace(authCode)
 
 	if Conf.AccessAuthCode != authCode {
 		ret.Code = -1
@@ -119,7 +125,9 @@ func LoginAuth(c *gin.Context) {
 
 		if err := session.Save(c); err != nil {
 			logging.LogErrorf("save session failed: " + err.Error())
-			c.Status(http.StatusInternalServerError)
+			session.Clear(c)
+			ret.Code = 1
+			ret.Msg = Conf.Language(258)
 			return
 		}
 		return
@@ -144,9 +152,13 @@ func LoginAuth(c *gin.Context) {
 	logging.LogInfof("auth success [ip=%s, maxAge=%d]", util.GetRemoteAddr(c.Request), maxAge)
 	if err := session.Save(c); err != nil {
 		logging.LogErrorf("save session failed: " + err.Error())
-		c.Status(http.StatusInternalServerError)
+		session.Clear(c)
+		ret.Code = 1
+		ret.Msg = Conf.Language(258)
 		return
 	}
+
+	util.BroadcastByType("auth", "loginAuth", 0, "", nil)
 }
 
 func GetCaptcha(c *gin.Context) {

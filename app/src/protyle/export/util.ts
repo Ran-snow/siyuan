@@ -8,12 +8,10 @@ import {Dialog} from "../../dialog";
 import {addScript} from "../util/addScript";
 import {isMobile} from "../../util/functions";
 import {Constants} from "../../constants";
-import {highlightRender} from "../render/highlightRender";
+import {highlightRender, lineNumberRender} from "../render/highlightRender";
 import {processRender} from "../util/processCode";
 import {isIPhone, isSafari, openByMobile, setStorageVal} from "../util/compatibility";
 import {useShell} from "../../util/pathName";
-import {isPaidUser} from "../../util/needSubscribe";
-import {getCloudURL} from "../../config/util/about";
 
 export const afterExport = (exportPath: string, msgId: string) => {
     /// #if !BROWSER
@@ -29,6 +27,7 @@ export const afterExport = (exportPath: string, msgId: string) => {
 
 export const exportImage = (id: string) => {
     const exportDialog = new Dialog({
+        disableAnimation: true,
         title: window.siyuan.languages.exportAsImage,
         content: `<div class="b3-dialog__content" style="${isMobile() ? "padding:8px;" : ""};background-color: var(--b3-theme-background)">
     <div style="${isMobile() ? "margin: 8px 0" : "padding: 48px;margin: 8px 0"}" class="export-img">
@@ -53,7 +52,14 @@ export const exportImage = (id: string) => {
 </div>
  <div class="fn__loading"><img height="128px" width="128px" src="stage/loading-pure.svg"></div>`,
         width: isMobile() ? "92vw" : "990px",
-        height: "70vh"
+        height: "70vh",
+        resizeCallback() {
+            previewElement.querySelectorAll(".code-block .protyle-linenumber__rows").forEach((item: HTMLElement) => {
+                if ((item.nextElementSibling as HTMLElement).style.wordBreak === "break-word") {
+                    lineNumberRender(item.parentElement);
+                }
+            });
+        }
     });
     exportDialog.element.setAttribute("data-key", Constants.DIALOG_EXPORTIMAGE);
     const btnsElement = exportDialog.element.querySelectorAll(".b3-button");
@@ -121,16 +127,9 @@ export const exportImage = (id: string) => {
     const watermarkElement = (exportDialog.element.querySelector("#watermark") as HTMLInputElement);
     watermarkElement.addEventListener("change", () => {
         window.siyuan.storage[Constants.LOCAL_EXPORTIMG].watermark = watermarkElement.checked;
-        if (watermarkElement.checked && !isPaidUser()) {
-            watermarkElement.checked = false;
-            showMessage(window.siyuan.languages._kernel[214].replaceAll("${accountServer}", getCloudURL("")));
-        }
         updateWatermark();
     });
     const updateWatermark = () => {
-        if (!isPaidUser()) {
-            return;
-        }
         const watermarkPreviewElement = exportDialog.element.querySelector(".export-img__watermark") as HTMLElement;
         watermarkPreviewElement.innerHTML = "";
         if (watermarkElement.checked) {

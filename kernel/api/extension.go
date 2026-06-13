@@ -121,6 +121,9 @@ func extensionCopy(c *gin.Context) {
 		}
 
 		u, _ := url.Parse(oName)
+		if nil == u {
+			continue
+		}
 		if "" == u.Path {
 			continue
 		}
@@ -224,13 +227,6 @@ func extensionCopy(c *gin.Context) {
 		})
 
 		tree, withMath = model.HTML2Tree(dom, luteEngine)
-		if nil == tree {
-			md, withMath, _ = model.HTML2Markdown(dom, luteEngine)
-			if withMath {
-				luteEngine.SetInlineMath(true)
-			}
-			tree = parse.Parse("", []byte(md), luteEngine.ParseOptions)
-		}
 	} else {
 		tree = parse.Parse("", []byte(md), luteEngine.ParseOptions)
 	}
@@ -287,7 +283,7 @@ func extensionCopy(c *gin.Context) {
 	parse.NestedInlines2FlattedSpansHybrid(tree, false)
 
 	md, _ = lute.FormatNodeSync(tree.Root, luteEngine.ParseOptions, luteEngine.RenderOptions)
-	ret.Data = map[string]interface{}{
+	ret.Data = map[string]any{
 		"md":       md,
 		"withMath": withMath,
 	}

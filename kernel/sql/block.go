@@ -58,18 +58,19 @@ type Block struct {
 	Updated  string
 }
 
-func updateRootContent(tx *sql.Tx, content, updated, id string) (err error) {
-	stmt := "UPDATE blocks SET content = ?, fcontent = ?, updated = ? WHERE id = ?"
-	if err = execStmtTx(tx, stmt, content, content, updated, id); err != nil {
+func updateRootContent(tx *sql.Tx, content, updated, ialContent, id string) (err error) {
+	stmt := "UPDATE blocks SET content = ?, fcontent = ?, updated = ?, ial = ? WHERE id = ?"
+	if err = execStmtTx(tx, stmt, content, content, updated, ialContent, id); err != nil {
 		return
 	}
-	stmt = "UPDATE blocks_fts SET content = ?, fcontent = ?, updated = ? WHERE id = ?"
-	if err = execStmtTx(tx, stmt, content, content, updated, id); err != nil {
-		return
-	}
-	if !caseSensitive {
-		stmt = "UPDATE blocks_fts_case_insensitive SET content = ?, fcontent = ?, updated = ? WHERE id = ?"
-		if err = execStmtTx(tx, stmt, content, content, updated, id); err != nil {
+	if caseSensitive {
+		stmt = "UPDATE blocks_fts SET content = ?, fcontent = ?, updated = ?, ial = ? WHERE id = ?"
+		if err = execStmtTx(tx, stmt, content, content, updated, ialContent, id); err != nil {
+			return
+		}
+	} else {
+		stmt = "UPDATE blocks_fts_case_insensitive SET content = ?, fcontent = ?, updated = ?, ial = ? WHERE id = ?"
+		if err = execStmtTx(tx, stmt, content, content, updated, ialContent, id); err != nil {
 			return
 		}
 	}
@@ -84,12 +85,13 @@ func updateBlockContent(tx *sql.Tx, block *Block) (err error) {
 		tx.Rollback()
 		return
 	}
-	stmt = "UPDATE blocks_fts SET content = ? WHERE id = ?"
-	if err = execStmtTx(tx, stmt, block.Content, block.ID); err != nil {
-		tx.Rollback()
-		return
-	}
-	if !caseSensitive {
+	if caseSensitive {
+		stmt = "UPDATE blocks_fts SET content = ? WHERE id = ?"
+		if err = execStmtTx(tx, stmt, block.Content, block.ID); err != nil {
+			tx.Rollback()
+			return
+		}
+	} else {
 		stmt = "UPDATE blocks_fts_case_insensitive SET content = ? WHERE id = ?"
 		if err = execStmtTx(tx, stmt, block.Content, block.ID); err != nil {
 			tx.Rollback()
@@ -124,12 +126,13 @@ func indexNode(tx *sql.Tx, id string) (err error) {
 		tx.Rollback()
 		return
 	}
-	stmt = "UPDATE blocks_fts SET content = ? WHERE id = ?"
-	if err = execStmtTx(tx, stmt, content, id); err != nil {
-		tx.Rollback()
-		return
-	}
-	if !caseSensitive {
+	if caseSensitive {
+		stmt = "UPDATE blocks_fts SET content = ? WHERE id = ?"
+		if err = execStmtTx(tx, stmt, content, id); err != nil {
+			tx.Rollback()
+			return
+		}
+	} else {
 		stmt = "UPDATE blocks_fts_case_insensitive SET content = ? WHERE id = ?"
 		if err = execStmtTx(tx, stmt, content, id); err != nil {
 			tx.Rollback()
@@ -144,28 +147,17 @@ func NodeStaticContent(node *ast.Node, excludeTypes []string, includeTextMarkATi
 		return ""
 	}
 
+	if ast.NodeDocument == node.Type {
+		return html.EscapeHTMLStr(node.IALAttr("title"))
+	}
+
 	if ast.NodeAttributeView == node.Type {
 		if fullAttrView {
-			return getAttributeViewContent(node.AttributeViewID)
+			return av.GetAttributeViewContent(node.AttributeViewID)
 		}
 
 		ret, _ := av.GetAttributeViewName(node.AttributeViewID)
-		return ret
-	}
-	return nodeStaticContent(node, excludeTypes, includeTextMarkATitleURL, includeAssetPath)
-}
-
-func nodeStaticContent(node *ast.Node, excludeTypes []string, includeTextMarkATitleURL, includeAssetPath bool) string {
-	if nil == node {
-		return ""
-	}
-
-	if ast.NodeDocument == node.Type {
-		return node.IALAttr("title")
-	}
-
-	if ast.NodeAttributeView == node.Type {
-		return ""
+		return html.EscapeHTMLStr(ret)
 	}
 
 	buf := bytes.Buffer{}
@@ -173,6 +165,17 @@ func nodeStaticContent(node *ast.Node, excludeTypes []string, includeTextMarkATi
 	lastSpace := false
 	ast.Walk(node, func(n *ast.Node, entering bool) ast.WalkStatus {
 		if !entering {
+			if ast.NodeTable == n.Type {
+				caption := n.IALAttr("caption")
+				if "" != caption {
+					caption = html.UnescapeHTMLStr(caption)
+					if strings.Contains(caption, "caption-side:") && strings.Contains(caption, "bottom") {
+						caption = gulu.Str.SubStringBetween(caption, ">", "<")
+						buf.WriteByte(' ')
+						buf.WriteString(caption)
+					}
+				}
+			}
 			return ast.WalkContinue
 		}
 
@@ -180,6 +183,24 @@ func nodeStaticContent(node *ast.Node, excludeTypes []string, includeTextMarkATi
 			if !lastSpace {
 				buf.WriteByte(' ')
 				lastSpace = true
+			}
+			if ast.NodeCallout == n.Type {
+				buf.WriteString(n.CalloutType + " ")
+				if "" != n.CalloutIcon && 0 == n.CalloutIconType {
+					buf.WriteString(n.CalloutIcon + " ")
+				}
+				if "" != n.CalloutTitle {
+					if titleTree := parse.Inline("", []byte(n.CalloutTitle), luteEngine.ParseOptions); nil != titleTree && nil != titleTree.Root.FirstChild.FirstChild {
+						var inlines []*ast.Node
+						for c := titleTree.Root.FirstChild.FirstChild; nil != c; c = c.Next {
+							inlines = append(inlines, c)
+						}
+						for _, inline := range inlines {
+							buf.WriteString(inline.Content())
+						}
+					}
+					buf.WriteByte(' ')
+				}
 			}
 			return ast.WalkContinue
 		}
@@ -189,6 +210,17 @@ func nodeStaticContent(node *ast.Node, excludeTypes []string, includeTextMarkATi
 		}
 
 		switch n.Type {
+		case ast.NodeTable:
+			caption := n.IALAttr("caption")
+			if "" != caption {
+				caption = html.UnescapeHTMLStr(caption)
+				if strings.Contains(caption, "caption-side:") && strings.Contains(caption, "bottom") {
+					return ast.WalkContinue
+				}
+				caption = gulu.Str.SubStringBetween(caption, ">", "<")
+				buf.WriteString(caption)
+				buf.WriteByte(' ')
+			}
 		case ast.NodeTableCell:
 			// 表格块写入数据库表时在单元格之间添加空格 https://github.com/siyuan-note/siyuan/issues/7654
 			if 0 < buf.Len() && ' ' != buf.Bytes()[buf.Len()-1] {

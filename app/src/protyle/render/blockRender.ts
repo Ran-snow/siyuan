@@ -1,4 +1,4 @@
-import {hasClosestByAttribute, hasTopClosestByClassName} from "../util/hasClosest";
+import {hasClosestByAttribute} from "../util/hasClosest";
 import {fetchPost, fetchSyncPost} from "../../util/fetch";
 import {processRender} from "../util/processCode";
 import {highlightRender} from "./highlightRender";
@@ -6,21 +6,20 @@ import {genBreadcrumb, improveBreadcrumbAppearance} from "../wysiwyg/renderBackl
 import {avRender} from "./av/render";
 import {genRenderFrame} from "./util";
 
+/**
+ * 渲染嵌入块
+ */
 export const blockRender = (protyle: IProtyle, element: Element, top?: number) => {
     let blockElements: Element[] = [];
-    if (element.getAttribute("data-type") === "NodeBlockQueryEmbed") {
-        // 编辑器内代码块编辑渲染
+    if (element.getAttribute("data-type") === "NodeBlockQueryEmbed" && element.getAttribute("data-render") !== "true") {
         blockElements = [element];
     } else {
-        blockElements = Array.from(element.querySelectorAll('[data-type="NodeBlockQueryEmbed"]'));
+        blockElements = Array.from(element.querySelectorAll('[data-type="NodeBlockQueryEmbed"]:not([data-render="true"])'));
     }
     if (blockElements.length === 0) {
         return;
     }
     blockElements.forEach((item: HTMLElement) => {
-        if (item.getAttribute("data-render") === "true") {
-            return;
-        }
         // 需置于请求返回前，否则快速滚动会导致重复加载 https://ld246.com/article/1666857862494?r=88250
         item.setAttribute("data-render", "true");
         genRenderFrame(item);
@@ -40,11 +39,7 @@ export const blockRender = (protyle: IProtyle, element: Element, top?: number) =
         } else {
             breadcrumb = window.siyuan.config.editor.embedBlockBreadcrumb;
         }
-        // https://github.com/siyuan-note/siyuan/issues/7575
-        const sbElement = hasTopClosestByClassName(item, "sb");
-        if (sbElement) {
-            breadcrumb = false;
-        }
+
         if (content.startsWith("//!js")) {
             try {
                 const includeIDs = new Function(

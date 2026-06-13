@@ -29,13 +29,65 @@ import (
 	"github.com/88250/lute/parse"
 	"github.com/88250/lute/render"
 	"github.com/emirpasic/gods/sets/hashset"
+	"github.com/siyuan-note/logging"
 	"github.com/siyuan-note/siyuan/kernel/av"
+	"github.com/siyuan-note/siyuan/kernel/conf"
 	"github.com/siyuan-note/siyuan/kernel/filesys"
 	"github.com/siyuan-note/siyuan/kernel/sql"
 	"github.com/siyuan-note/siyuan/kernel/task"
 	"github.com/siyuan-note/siyuan/kernel/treenode"
 	"github.com/siyuan-note/siyuan/kernel/util"
 )
+
+func PushReloadSnippet(snippet *conf.Snpt) {
+	util.BroadcastByType("main", "setSnippet", 0, "", snippet)
+}
+
+func PushReloadPlugin(uninstallPluginNameSet, unloadPluginNameSet, reloadPluginSet, dataChangePluginSet *hashset.Set, excludeApp string) {
+	// 按优先级从高到低排列，同一插件只保留在优先级最高的集合中
+	orderedSets := []*hashset.Set{uninstallPluginNameSet, unloadPluginNameSet, reloadPluginSet, dataChangePluginSet}
+	slices := make([][]string, len(orderedSets))
+	// 按顺序遍历所有集合
+	for i, set := range orderedSets {
+		if nil != set {
+			// 遍历当前集合的所有插件名称
+			for _, n := range set.Values() {
+				name := n.(string)
+				// 将该插件从所有后续集合中移除
+				for _, lowerSet := range orderedSets[i+1:] {
+					if nil != lowerSet {
+						lowerSet.Remove(name)
+					}
+				}
+			}
+		}
+
+		// 将当前集合转换为字符串切片
+		if nil == set {
+			slices[i] = []string{}
+		} else {
+			strs := make([]string, 0, set.Size())
+			for _, n := range set.Values() {
+				strs = append(strs, n.(string))
+			}
+			slices[i] = strs
+		}
+	}
+
+	logging.LogInfof("reload plugins, uninstalls=%v, unloads=%v, reloads=%v, dataChanges=%v", slices[0], slices[1], slices[2], slices[3])
+	payload := map[string]any{
+		"uninstallPlugins":  slices[0], // 插件卸载
+		"unloadPlugins":     slices[1], // 插件禁用
+		"reloadPlugins":     slices[2], // 插件启用，或插件代码变更
+		"dataChangePlugins": slices[3], // 插件存储数据变更
+	}
+
+	if "" == excludeApp {
+		util.BroadcastByType("main", "reloadPlugin", 0, "", payload)
+		return
+	}
+	util.BroadcastByTypeAndExcludeApp(excludeApp, "main", "reloadPlugin", 0, "", payload)
+}
 
 func refreshDocInfo(tree *parse.Tree) {
 	if nil == tree {
@@ -51,17 +103,24 @@ func refreshDocInfoWithSize(tree *parse.Tree, size uint64) {
 	}
 
 	refreshDocInfo0(tree, size)
-	refreshParentDocInfo(tree)
+	go func() {
+		time.Sleep(128 * time.Millisecond)
+		refreshParentDocInfo(tree)
+	}()
 }
 
 func refreshParentDocInfo(tree *parse.Tree) {
+	if nil == tree {
+		return
+	}
+
 	parentTree := loadParentTree(tree)
 	if nil == parentTree {
 		return
 	}
 
 	luteEngine := lute.New()
-	renderer := render.NewJSONRenderer(parentTree, luteEngine.RenderOptions)
+	renderer := render.NewJSONRenderer(parentTree, luteEngine.RenderOptions, luteEngine.ParseOptions)
 	data := renderer.Render()
 	refreshDocInfo0(parentTree, uint64(len(data)))
 }
@@ -76,20 +135,25 @@ func refreshDocInfo0(tree *parse.Tree, size uint64) {
 	}
 
 	subFileCount := 0
-	subFiles, err := os.ReadDir(filepath.Join(util.DataDir, tree.Box, strings.TrimSuffix(tree.Path, ".sy")))
-	if err == nil {
-		for _, subFile := range subFiles {
-			if "true" == tree.Root.IALAttr("custom-hidden") {
-				continue
-			}
+	if "true" != tree.Root.IALAttr(DocHiddenAttr) {
+		subDir := filepath.Join(util.DataDir, tree.Box, strings.TrimSuffix(tree.Path, ".sy"))
+		subFiles, err := os.ReadDir(subDir)
+		if err == nil {
+			for _, subFile := range subFiles {
+				if !strings.HasSuffix(subFile.Name(), ".sy") {
+					continue
+				}
 
-			if strings.HasSuffix(subFile.Name(), ".sy") {
+				subDocIAL := filesys.DocIAL(filepath.Join(subDir, subFile.Name()))
+				if "true" == subDocIAL[DocHiddenAttr] {
+					continue
+				}
 				subFileCount++
 			}
 		}
 	}
 
-	docInfo := map[string]interface{}{
+	docInfo := map[string]any{
 		"rootID":       tree.ID,
 		"name":         tree.Root.IALAttr("title"),
 		"alias":        tree.Root.IALAttr("alias"),
@@ -194,14 +258,25 @@ func refreshDynamicRefText(updatedDefNode *ast.Node, updatedTree *parse.Tree) {
 
 // refreshDynamicRefTexts 用于批量刷新块引用的动态锚文本。
 // 该实现依赖了数据库缓存，导致外部调用时可能需要阻塞等待数据库写入后才能获取到 refs
-func refreshDynamicRefTexts(updatedDefNodes map[string]*ast.Node, updatedTrees map[string]*parse.Tree) {
+func refreshDynamicRefTexts(updatedDefNodes map[string]*ast.Node, updatedTrees map[string]*parse.Tree) (changedRootIDs []string) {
+	for t := range updatedTrees {
+		changedRootIDs = append(changedRootIDs, t)
+	}
+
 	for i := 0; i < 7; i++ {
 		updatedRefNodes, updatedRefTrees := refreshDynamicRefTexts0(updatedDefNodes, updatedTrees)
 		if 1 > len(updatedRefNodes) {
 			break
 		}
 		updatedDefNodes, updatedTrees = updatedRefNodes, updatedRefTrees
+
+		for t := range updatedTrees {
+			changedRootIDs = append(changedRootIDs, t)
+		}
 	}
+
+	changedRootIDs = gulu.Str.RemoveDuplicatedElem(changedRootIDs)
+	return
 }
 
 func refreshDynamicRefTexts0(updatedDefNodes map[string]*ast.Node, updatedTrees map[string]*parse.Tree) (updatedRefNodes map[string]*ast.Node, updatedRefTrees map[string]*parse.Tree) {
@@ -330,7 +405,7 @@ func updateAttributeViewBlockText(updatedDefNodes map[string]*ast.Node) {
 				av.SaveAttributeView(attrView)
 				ReloadAttrView(avID)
 
-				refreshRelatedSrcAvs(avID)
+				refreshRelatedSrcAvs(avID, nil)
 			}
 		}
 	}
@@ -342,5 +417,5 @@ func ReloadAttrView(avID string) {
 }
 
 func pushReloadAttrView(avID string) {
-	util.BroadcastByType("protyle", "refreshAttributeView", 0, "", map[string]interface{}{"id": avID})
+	util.BroadcastByType("protyle", "refreshAttributeView", 0, "", map[string]any{"id": avID})
 }

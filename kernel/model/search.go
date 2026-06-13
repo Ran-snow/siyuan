@@ -41,7 +41,6 @@ import (
 	"github.com/88250/lute/parse"
 	"github.com/88250/vitess-sqlparser/sqlparser"
 	"github.com/jinzhu/copier"
-	"github.com/siyuan-note/filelock"
 	"github.com/siyuan-note/logging"
 	"github.com/siyuan-note/siyuan/kernel/conf"
 	"github.com/siyuan-note/siyuan/kernel/search"
@@ -514,9 +513,8 @@ func FindReplace(keyword, replacement string, replaceTypes map[string]bool, ids 
 	renameRootTitles := map[string]string{}
 	cachedTrees := map[string]*parse.Tree{}
 
-	historyDir, err := getHistoryDir(HistoryOpReplace, time.Now())
+	historyDir, err := getHistoryDir(HistoryOpReplace)
 	if err != nil {
-		logging.LogErrorf("get history dir failed: %s", err)
 		return
 	}
 
@@ -544,22 +542,7 @@ func FindReplace(keyword, replacement string, replaceTypes map[string]bool, ids 
 			continue
 		}
 
-		historyPath := filepath.Join(historyDir, tree.Box, tree.Path)
-		if err = os.MkdirAll(filepath.Dir(historyPath), 0755); err != nil {
-			logging.LogErrorf("generate history failed: %s", err)
-			return
-		}
-
-		var data []byte
-		if data, err = filelock.ReadFile(filepath.Join(util.DataDir, tree.Box, tree.Path)); err != nil {
-			logging.LogErrorf("generate history failed: %s", err)
-			return
-		}
-
-		if err = gulu.File.WriteFileSafer(historyPath, data, 0644); err != nil {
-			logging.LogErrorf("generate history failed: %s", err)
-			return
-		}
+		generateTreeHistory(tree, historyDir)
 
 		cachedTrees[bt.RootID] = tree
 	}
@@ -1102,6 +1085,8 @@ func replaceTextNode(text *ast.Node, method int, keyword string, replacement str
 			for _, rNode := range replaceNodes {
 				text.InsertBefore(rNode)
 			}
+			block := treenode.ParentBlock(text)
+			treenode.RefreshUpdated(block)
 			return true
 		}
 	} else if 3 == method {
@@ -1120,6 +1105,8 @@ func replaceTextNode(text *ast.Node, method int, keyword string, replacement str
 			for _, rNode := range replaceNodes {
 				text.InsertBefore(rNode)
 			}
+			block := treenode.ParentBlock(text)
+			treenode.RefreshUpdated(block)
 			return true
 		}
 	}
@@ -1433,6 +1420,7 @@ func buildTypeFilter(types map[string]bool) string {
 		s.VideoBlock = types["videoBlock"]
 		s.IFrameBlock = types["iframeBlock"]
 		s.WidgetBlock = types["widgetBlock"]
+		s.Callout = types["callout"]
 	} else {
 		s.Document = Conf.Search.Document
 		s.Heading = Conf.Search.Heading
@@ -1451,6 +1439,7 @@ func buildTypeFilter(types map[string]bool) string {
 		s.VideoBlock = Conf.Search.VideoBlock
 		s.IFrameBlock = Conf.Search.IFrameBlock
 		s.WidgetBlock = Conf.Search.WidgetBlock
+		s.Callout = Conf.Search.Callout
 	}
 	return s.TypeFilter()
 }
@@ -1886,7 +1875,7 @@ func fromSQLBlock(sqlBlock *sql.Block, terms string, beforeLen int) (block *Bloc
 	content = maxContent(content, 5120)
 	tag, _ := markSearch(sqlBlock.Tag, terms, beforeLen)
 	markdown := maxContent(sqlBlock.Markdown, 5120)
-	fContent := sqlBlock.FContent
+	fContent := util.EscapeHTML(sqlBlock.FContent) // fContent 会用于和 content 对比，在反链计算时用于判断是否是列表项下第一个子块，所以也需要转义 https://github.com/siyuan-note/siyuan/issues/11001
 	block = &Block{
 		Box:      sqlBlock.Box,
 		Path:     sqlBlock.Path,
@@ -1936,7 +1925,7 @@ func maxContent(content string, maxLen int) string {
 	idx := strings.Index(content, "<mark>")
 	if 128 < maxLen && maxLen <= idx {
 		head := bytes.Buffer{}
-		for i := 0; i < 512; i++ {
+		for range 512 {
 			r, size := utf8.DecodeLastRuneInString(content[:idx])
 			head.WriteRune(r)
 			idx -= size
@@ -2149,7 +2138,7 @@ func markReplaceSpanWithSplit(text string, keywords []string, replacementStart, 
 	tmp := search.EncloseHighlighting(text, keywords, replacementStart, replacementEnd, Conf.Search.CaseSensitive, true)
 	parts := strings.Split(tmp, replacementEnd)
 	buf := bytes.Buffer{}
-	for i := 0; i < len(parts); i++ {
+	for i := range len(parts) {
 		if i >= len(parts)-1 {
 			buf.WriteString(parts[i])
 			break
@@ -2271,10 +2260,14 @@ func getRefSearchIgnoreLines() (ret []string) {
 
 func filterQueryInvisibleChars(query string) string {
 	query = strings.ReplaceAll(query, "　", "_@full_width_space@_")
+	query = strings.ReplaceAll(query, "\u2002", "_@en_space@_")
+	query = strings.ReplaceAll(query, "\u2003", "_@em_space@_")
 	query = strings.ReplaceAll(query, "\t", "_@tab@_")
 	query = strings.ReplaceAll(query, string(gulu.ZWJ), "__@ZWJ@__")
 	query = util.RemoveInvalid(query)
 	query = strings.ReplaceAll(query, "_@full_width_space@_", "　")
+	query = strings.ReplaceAll(query, "_@en_space@_", "\u2002")
+	query = strings.ReplaceAll(query, "_@em_space@_", "\u2003")
 	query = strings.ReplaceAll(query, "_@tab@_", "\t")
 	query = strings.ReplaceAll(query, "__@ZWJ@__", string(gulu.ZWJ))
 	query = strings.ReplaceAll(query, string(gulu.ZWJ)+"#", "#")

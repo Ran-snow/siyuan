@@ -1,10 +1,17 @@
-import {hasClosestByAttribute, hasClosestByClassName, hasTopClosestByClassName,} from "../../protyle/util/hasClosest";
+import {
+    hasClosestBlock,
+    hasClosestByAttribute,
+    hasClosestByClassName,
+    hasTopClosestByClassName, isInEmbedBlock,
+} from "../../protyle/util/hasClosest";
 import {closeModel, closePanel} from "./closePanel";
 import {popMenu} from "../menu";
 import {activeBlur} from "./keyboardToolbar";
 import {isIPhone} from "../../protyle/util/compatibility";
 import {App} from "../../index";
 import {globalTouchEnd, globalTouchStart} from "../../boot/globalEvent/touch";
+import {getRangeByPoint} from "../../protyle/util/selection";
+import {getCurrentEditor} from "../editor";
 
 let clientX: number;
 let clientY: number;
@@ -27,13 +34,28 @@ const popSide = (render = true) => {
 };
 
 export const handleTouchEnd = (event: TouchEvent, app: App) => {
+    const target = event.target as HTMLElement;
     if (isIPhone() && globalTouchEnd(event, yDiff, time, app)) {
         event.stopImmediatePropagation();
         event.preventDefault();
         return;
     }
+    if (typeof yDiff === "undefined" && window.siyuan.mobile.editor.protyle.options.render.gutter) {
+        const nodeElement = hasClosestBlock(target);
+        if (nodeElement) {
+            if (nodeElement && (nodeElement.classList.contains("list") || nodeElement.classList.contains("li"))) {
+                // 光标在列表下部应显示右侧的元素，而不是列表本身。放在 windowEvent 中的 mousemove 下处理
+                return;
+            }
+            const embedElement = isInEmbedBlock(nodeElement);
+            if (embedElement) {
+                window.siyuan.mobile.editor.protyle.gutter.render(window.siyuan.mobile.editor.protyle, embedElement);
+                return;
+            }
+            window.siyuan.mobile.editor.protyle.gutter.render(window.siyuan.mobile.editor.protyle, nodeElement, target);
+        }
+    }
     isFirstMove = true;
-    const target = event.target as HTMLElement;
     if (!clientY || typeof yDiff === "undefined" ||
         target.tagName === "AUDIO" ||
         hasClosestByClassName(target, "b3-dialog", true) ||
@@ -67,7 +89,7 @@ export const handleTouchEnd = (event: TouchEvent, app: App) => {
     const isXScroll = Math.abs(xDiff) > Math.abs(yDiff);
     const modelElement = hasClosestByAttribute(target, "id", "model", true);
     if (modelElement) {
-        if (isXScroll && firstDirection === "toRight" && !lastClientX) {
+        if (isXScroll && firstDirection === "toRight" && !lastClientX && !hasClosestByClassName(target, "protyle-wysiwyg", true)) {
             closeModel();
         }
         return;
@@ -144,6 +166,15 @@ export const handleTouchStart = (event: TouchEvent) => {
     if (globalTouchStart(event)) {
         return;
     }
+
+    if (getSelection().rangeCount > 0 && hasClosestBlock(event.target as Element)) {
+        const editor = getCurrentEditor();
+        if (editor && !editor.protyle.disabled && event.touches[0].clientY > window.innerHeight / 2 &&
+            document.querySelector("#keyboardToolbar").classList.contains("fn__none")) {
+            window.siyuan.mobile.touchRange = getRangeByPoint(event.touches[0].clientX, event.touches[0].clientY);
+        }
+    }
+
     firstDirection = null;
     xDiff = undefined;
     yDiff = undefined;
@@ -232,48 +263,44 @@ export const handleTouchMove = (event: TouchEvent) => {
         if (hasClosestByAttribute(target, "id", "model", true)) {
             return;
         }
-        let scrollElement = hasClosestByAttribute(target, "data-type", "NodeCodeBlock") ||
-            hasClosestByAttribute(target, "data-type", "NodeAttributeView") ||
-            hasClosestByAttribute(target, "data-type", "NodeMathBlock") ||
-            hasClosestByAttribute(target, "data-type", "NodeTable") ||
-            hasTopClosestByClassName(target, "list") ||
-            hasTopClosestByClassName(target, "protyle-breadcrumb__bar--nowrap");
-        if (scrollElement) {
-            if (scrollElement.classList.contains("table")) {
-                scrollElement = scrollElement.firstElementChild as HTMLElement;
-            } else if (scrollElement.classList.contains("code-block")) {
-                scrollElement = scrollElement.firstElementChild.nextElementSibling as HTMLElement;
-            } else if (scrollElement.classList.contains("av")) {
-                scrollElement = hasClosestByClassName(target, "layout-tab-bar") || hasClosestByClassName(target, "av__scroll");
-            } else if (scrollElement.dataset.type === "NodeMathBlock") {
-                scrollElement = target;
-                while (scrollElement && scrollElement.dataset.type !== "NodeMathBlock") {
-                    if (scrollElement.nodeType === 1 && scrollElement.scrollLeft > 0) {
-                        break;
+        if (sideMaskElement.classList.contains("fn__none")) {
+            let scrollElement = hasClosestByAttribute(target, "data-type", "NodeCodeBlock");
+            if (event.touches.length > 1 || (scrollElement && !scrollElement.classList.contains("code-block"))) {
+                scrollBlock = true;
+                return;
+            }
+            if (!scrollElement) {
+                scrollElement = hasClosestByAttribute(target, "data-type", "NodeAttributeView") ||
+                    hasClosestByAttribute(target, "data-type", "NodeMathBlock") ||
+                    hasClosestByAttribute(target, "data-type", "NodeTable") ||
+                    hasTopClosestByClassName(target, "list") ||
+                    hasTopClosestByClassName(target, "protyle-breadcrumb__bar--nowrap");
+            }
+            if (scrollElement) {
+                if (scrollElement.classList.contains("table")) {
+                    scrollElement = scrollElement.firstElementChild as HTMLElement;
+                } else if (scrollElement.classList.contains("code-block")) {
+                    scrollElement = scrollElement.firstElementChild.nextElementSibling as HTMLElement;
+                } else if (scrollElement.classList.contains("av")) {
+                    scrollElement = hasClosestByClassName(target, "layout-tab-bar") || hasClosestByClassName(target, "av__scroll") ||
+                        hasClosestByClassName(target, "av__kanban");
+                } else if (scrollElement.dataset.type === "NodeMathBlock") {
+                    while (scrollElement && scrollElement.nodeType === 1) {
+                        if (scrollElement.scrollWidth > scrollElement.clientWidth) {
+                            break;
+                        }
+                        scrollElement = scrollElement.firstElementChild as HTMLElement;
                     }
-                    scrollElement = scrollElement.parentElement;
                 }
-            }
-            let noScroll = false;
-            if (scrollElement && scrollElement.scrollLeft === 0) {
-                scrollElement.scrollLeft = 1;
-                if (scrollElement.scrollLeft === 0) {
-                    noScroll = true;
-                } else {
-                    scrollElement.scrollLeft = 0;
-                }
-            }
-            if (!noScroll) {
                 if (scrollElement && (
                     (xDiff < 0 && scrollElement.scrollLeft > 0) ||
-                    (xDiff > 0 && scrollElement.clientWidth + scrollElement.scrollLeft < scrollElement.scrollWidth)
+                    (xDiff > 0 && Math.ceil(scrollElement.clientWidth + scrollElement.scrollLeft) < scrollElement.scrollWidth)
                 )) {
                     scrollBlock = true;
+                }
+                if (scrollBlock) {
                     return;
                 }
-            }
-            if (scrollBlock) {
-                return;
             }
         }
 

@@ -46,3 +46,7 @@ func GetGinContextRole(c *gin.Context) Role {
 func IsAdminRoleContext(c *gin.Context) bool {
 	return true
 }
+
+func IsReadOnlyRoleContext(c *gin.Context) bool {
+	return IsReadOnlyRole(GetGinContextRole(c))
+}
